@@ -125,9 +125,10 @@ AIsouler/MyClash main
 - 国内 QUIC 的 `geolocation-cn` 放行
 - `default-nameserver` 使用国内 DoH
 - `rule-set:cn` / `rule-set:geolocation-cn` 使用国内 DoH
+- 移除上游 `Crypto` / `cryptocurrency` 分流组与规则集
 - 四份核心配置 / 脚本的 NetWeave 项目头部与链接
 
-保护脚本采用幂等处理：已经处于优化状态时再次运行不会因为“找不到旧写法”而失败。
+保护逻辑已拆分到 `.github/scripts/preserve_downstream.py`，采用幂等处理；已经处于优化状态时再次运行不会因为“找不到旧写法”而失败。
 
 因此上游后续对核心脚本和配置的功能、规则与结构调整仍可继续合入；当结构发生已知冲突时，会先采用上游版本，再重放本 Fork 的差异，而不是长期锁死旧文件。
 
@@ -192,7 +193,7 @@ https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfigLit
 - 生成地区自动选择组
 - 隐藏地区手动选择组
 - 生成高 / 低倍率节点组
-- 分别过滤低倍率、高倍率或非地区节点
+- 过滤高倍率或非地区节点
 - 屏蔽国外 QUIC
 - IPv4 / IPv6 优先
 - 链式代理
@@ -204,9 +205,6 @@ https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfigLit
 当前主要结构为：
 
 ```text
-bootstrap / default
-  └─ 国内 DoH #DIRECT
-
 国内域名
   └─ rule-set:cn / geolocation-cn
        └─ 国内 DoH #DIRECT
@@ -223,7 +221,6 @@ FCM / Android 推送相关域名
 
 同时保留：
 
-- `direct-nameserver` 的系统 / 国内 DNS 兼容回退
 - `fake-ip` 模式
 - ARC DNS cache
 - `store-fake-ip`
@@ -238,13 +235,11 @@ FCM / Android 推送相关域名
 - 自动排除无效 / 信息类节点
 - 自动识别节点倍率
 - 高倍率 / 低倍率节点组
-- 可分别过滤高倍率 / 低倍率节点
 - 自定义节点
 - 链式代理
 - 机场私有 DNS / hosts 节点解析兼容
 - Bilibili PCDN 屏蔽规则
 - Google Play 下载兼容处理
-- Steam / TikTok / Spotify 等域名与 IP 规则集
 - `rule-set` / MRS 规则集
 - Bettbox 图形化参数
 
@@ -252,7 +247,7 @@ FCM / Android 推送相关域名
 
 包括但不限于：
 
-`默认代理`、`手动选择`、`自动选择`、`负载均衡`、`FCM`、`YouTube`、`Google`、`AI`、`Microsoft`、`Apple`、`Telegram`、`Steam`、`TikTok`、`Twitter`、`Instagram`、`Netflix`、`Emby`、`PikPak`、`Spotify`、`Crypto`、`EHentai`、`AdBlock`、`直连`、`漏网之鱼`。
+`默认代理`、`手动选择`、`自动选择`、`负载均衡`、`FCM`、`YouTube`、`Google`、`AI`、`Microsoft`、`Apple`、`Telegram`、`Steam`、`TikTok`、`Twitter`、`Instagram`、`Netflix`、`Emby`、`PikPak`、`Spotify`、`EHentai`、`AdBlock`、`直连`、`漏网之鱼`。
 
 地区节点组包括：香港、日本、美国、新加坡、台湾省，以及低倍率、高倍率和其他节点组。
 
@@ -262,11 +257,11 @@ FCM / Android 推送相关域名
 
 特别是 FCM 的出口策略：如果本地网络可以稳定直连 Google，可保持 `FCM → 直连`；如果无法稳定直连，应使用一个长期稳定的固定代理出口，而不是频繁切换节点。
 
-国内 DoH 与国内 QUIC 放行则主要用于改善中国大陆服务的 CDN 调度和 HTTP/3 使用体验，同时让主要 DNS 解析路径尽量使用加密 DNS。
+国内 DoH 与国内 QUIC 放行则主要用于改善中国大陆服务的 CDN 调度和 HTTP/3 使用体验，同时尽量避免扩大明文 DNS 查询范围。
 
 ## 致谢
 
-感谢 Mihomo、Bettbox、bett-rules、Qure、adblockfilters 等相关开源项目及维护者。
+感谢 Mihomo、Bettbox、bett-rules、Qure、clash-rules、adblockfilters 等相关开源项目及维护者。
 
 本仓库的绝大部分基础设计、脚本、规则组织方式与持续更新都来自原作者的项目。特别感谢原作者 AIsouler 的工作：
 
