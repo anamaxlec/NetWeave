@@ -1,10 +1,8 @@
 #  ---------说明---------
-#  NetWeave - mihomo配置（精简版）
-#  维护：anamaxlec
-#  原作者：AIsouler
-#  项目仓库：https://github.com/anamaxlec/NetWeave
-#  配置链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfigLite.yaml
-#  上游项目：https://github.com/AIsouler/MyClash
+#  mihomo配置（精简版）
+#  作者：AIsouler
+#  原仓库：https://github.com/AIsouler/MyClash
+#  配置链接：https://raw.githubusercontent.com/AIsouler/MyClash/main/Config/mihomoConfigLite.yaml
 #  友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
 #  ---------------------
 
@@ -21,7 +19,7 @@ proxy_providers_common:
 # 全局过滤节点
 global_exclude_filter:
   &global_exclude_filter {
-    exclude-filter: '(?i)(群|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|电报|频道|无法|说明|提示|访问|支持|教程|关注|更新|作者|加入|超时|收藏|优惠|福利|邀请|好友|失联|选择|剩余|公益|发布|DIZTNA|通路|登录|定时|渠道|牢记|永久|余额|阁下|本站|刷新|导航|建议|重置|以下|⚠️|@|t\.me\/\+|\bexpire\b|\bhttps?:\/\/|\.com|\btraffic\b)',
+    exclude-filter: '(?i)(群|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|电报|频道|无法|说明|提示|访问|支持|教程|关注|更新|作者|加入|超时|收藏|优惠|福利|邀请|好友|失联|选择|剩余|公益|发布|DIZTNA|通路|登录|定时|渠道|牢记|永久|余额|阁下|本站|刷新|导航|建议|重置|以下|过滤|⚠️|@|t\.me\/\+|\bexpire\b|\bhttps?:\/\/|\.com|\btraffic\b)',
   }
 
 # 订阅提供者，如果你想要添加多个订阅提供者，可以复制 provider1 的配置块，并修改 url 、 path 和 additional-prefix 字段。
@@ -85,35 +83,12 @@ dns:
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/15
   fake-ip-range6: 2001:2::1/48
-  # FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
-  fake-ip-filter:
-    [
-      'rule-set:private',
-      'rule-set:fakeip_filter',
-      'rule-set:geolocation-cn',
-      'rule-set:googlefcm',
-      'mtalk.google.com',
-      'mtalk4.google.com',
-      'mtalk-dev.google.com',
-      'mtalk-staging.google.com',
-      'alt1-mtalk.google.com',
-      'alt2-mtalk.google.com',
-      'alt3-mtalk.google.com',
-      'alt4-mtalk.google.com',
-      'alt5-mtalk.google.com',
-      'alt6-mtalk.google.com',
-      'alt7-mtalk.google.com',
-      'alt8-mtalk.google.com',
-      'android.apis.google.com',
-      'device-provisioning.googleapis.com',
-      'firebaseinstallations.googleapis.com',
-    ]
+  fake-ip-filter: ['rule-set:private', 'rule-set:fakeip_filter', 'rule-set:geolocation-cn']
   proxy-server-nameserver: *chinaDohDNS
-  default-nameserver: *chinaDNS
+  default-nameserver: *chinaDohDNS
   nameserver: *foreignDNS
   nameserver-policy:
-    'rule-set:cn': *chinaDohDNS
-    'rule-set:geolocation-cn': *chinaDohDNS
+    'rule-set:cn': *chinaDNS
   direct-nameserver: ['system', '223.5.5.5', '119.29.29.29']
 
 hosts:
@@ -229,16 +204,11 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/steam.mrs'
     path: './ruleset/steam.mrs'
     path-in-bundle: 'geo/geosite/steam.mrs'
-  steam_asn:
+  steam_ip:
     <<: *rule_providers_ip
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/asn/AS32590.mrs'
-    path: './ruleset/steam_asn.mrs'
-    path-in-bundle: 'asn/AS32590.mrs'
-  googlefcm:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/googlefcm.mrs'
-    path: './ruleset/googlefcm.mrs'
-    path-in-bundle: 'geo/geosite/googlefcm.mrs'
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geoip/steam.mrs'
+    path: './ruleset/steam_ip.mrs'
+    path-in-bundle: 'geo/geoip/steam.mrs'
   geolocation-!cn:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/geolocation-!cn.mrs'
@@ -352,11 +322,11 @@ group_filter:
   TW_filter: &TW_filter { filter: '(?i)(🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan)' }
   low_filter:
     &low_filter {
-      filter: '(?i)(^(?!.*(?:剩|期)).*(?:(?<!\d)0\.[0-5]|(?<=[ |\-])0[*×x倍])|(?:(?<=[ |\-])[*×x]0(?= |倍|$))|^(?!.*(?:客户端|软件)).*下载|低倍|免费|(?<![A-Za-z])free(?![A-Za-z]))',
+      filter: '(?i)(^(?!.*(?:剩|期)).*(?:(?<!\d)0\.[0-5]|(?<=[ |｜丨∣┃\-‐–—−－﹣])0[*×✕✖⨯⨉x倍])|(?:(?<=[ |｜丨∣┃\-‐–—−－﹣])[*×✕✖⨯⨉x]0(?= |倍|$))|^(?!.*(?:客户端|软件)).*下载|低倍|免费|(?<![A-Za-z])free(?![A-Za-z]))',
     }
   high_filter:
     &high_filter {
-      filter: '(?i)(?<=[ |\-])((?:[*×x]\s*(?:[2-9]\d*|[1-9]\d+)(?:\.\d+)?)|(?:(?<![\d.])(?:[2-9]\d*|[1-9]\d+)(?:\.\d+)?\s*(?:倍|[*×x])))',
+      filter: '(?i)(?<=[ |｜丨∣┃\-‐–—−－﹣])((?:[*×✕✖⨯⨉x]\s*(?:[2-9]\d*|[1-9]\d+)(?:\.\d+)?)|(?:(?<![\d.])(?:[2-9]\d*|[1-9]\d+)(?:\.\d+)?\s*(?:倍|[*×✕✖⨯⨉x])))',
     }
   exclude_filter:
     &exclude_filter {
@@ -492,7 +462,7 @@ rules:
   - DOMAIN,international-gfe.download.nvidia.com,直连
 
   # 禁用国外 QUIC 流量
-  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT
+  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT
 
   # 广告拦截
   - RULE-SET,adblockmihomolite,AdBlock
@@ -504,7 +474,7 @@ rules:
   - RULE-SET,telegram,Telegram
   - RULE-SET,telegram_ip,Telegram,no-resolve
   - RULE-SET,steam,Steam
-  - RULE-SET,steam_asn,Steam,no-resolve
+  - RULE-SET,steam_ip,Steam,no-resolve
 
   # 兜底规则
   - RULE-SET,geolocation-!cn,默认代理
