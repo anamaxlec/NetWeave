@@ -4,11 +4,10 @@ on:
   schedule:
     # 每天 UTC 18:00（北京时间次日 02:00）检查一次上游更新
     - cron: '0 18 * * *'
-  workflow_dispatch: # 支持在 Actions 页面手动触发
+  workflow_dispatch:
   push:
     branches: ['main']
     paths:
-      # 修改同步逻辑时立即自测一次，也可用于手动触发一次同步
       - '.github/workflows/sync-upstream.yaml'
 
 permissions:
@@ -31,10 +30,53 @@ jobs:
         run: git fetch upstream main
 
       - name: Merge upstream into main
+        shell: bash
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git merge upstream/main --no-edit
+
+          if git merge upstream/main --no-edit; then
+            echo "Upstream merged without conflicts"
+            exit 0
+          fi
+
+          echo "Merge conflict detected; resolving known downstream files"
+
+          mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+          if [ "${#conflicts[@]}" -eq 0 ]; then
+            echo "::error::git merge failed but no unmerged paths were reported"
+            git merge --abort || true
+            exit 1
+          fi
+
+          for file in "${conflicts[@]}"; do
+            case "$file" in
+              README.md)
+                # README 是 NetWeave 自己的项目说明，始终保留下游版本。
+                git checkout --ours -- "$file"
+                ;;
+              Config/mihomoConfig.yaml|Config/mihomoConfigLite.yaml|Script/Script.js|Script/mihomoScript.js)
+                # 配置/脚本优先采用上游最新结构，下一步再统一重放 NetWeave patch。
+                git checkout --theirs -- "$file"
+                ;;
+              *)
+                echo "::error::Unknown merge conflict: $file"
+                git merge --abort || true
+                exit 1
+                ;;
+            esac
+            git add -- "$file"
+          done
+
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo "::error::Unresolved merge conflicts remain"
+            git merge --abort || true
+            exit 1
+          fi
+
+          git commit --no-edit
 
       - name: Preserve downstream network optimizations
         shell: bash
@@ -75,6 +117,66 @@ jobs:
           QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
           OLD_QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
 
+          STATIC_HEADERS = {
+              Path('Config/mihomoConfig.yaml'): """#  ---------说明---------
+          #  NetWeave - mihomo配置（全量版）
+          #  维护：anamaxlec
+          #  原作者：AIsouler
+          #  项目仓库：https://github.com/anamaxlec/NetWeave
+          #  配置链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfig.yaml
+          #  上游项目：https://github.com/AIsouler/MyClash
+          #  友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
+          #  ---------------------
+          """,
+              Path('Config/mihomoConfigLite.yaml'): """#  ---------说明---------
+          #  NetWeave - mihomo配置（精简版）
+          #  维护：anamaxlec
+          #  原作者：AIsouler
+          #  项目仓库：https://github.com/anamaxlec/NetWeave
+          #  配置链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfigLite.yaml
+          #  上游项目：https://github.com/AIsouler/MyClash
+          #  友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
+          #  ---------------------
+          """,
+          }
+
+          JS_HEADERS = {
+              Path('Script/Script.js'): """/**
+           * NetWeave - mihomo配置覆写脚本（精简版）
+           * 维护：anamaxlec
+           * 原作者：AIsouler
+           * 项目仓库：https://github.com/anamaxlec/NetWeave
+           * 脚本链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Script/Script.js
+           * 上游项目：https://github.com/AIsouler/MyClash
+           * 友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
+           */
+          """,
+              Path('Script/mihomoScript.js'): """/**
+           * NetWeave - mihomo配置覆写脚本（全量版）
+           * 维护：anamaxlec
+           * 原作者：AIsouler
+           * 项目仓库：https://github.com/anamaxlec/NetWeave
+           * 脚本链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Script/mihomoScript.js
+           * 上游项目：https://github.com/AIsouler/MyClash
+           * 友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
+           */
+          """,
+          }
+
+          def dedent_literal(text):
+              lines = text.splitlines()
+              prefix = None
+              for line in lines[1:]:
+                  if line.strip():
+                      spaces = len(line) - len(line.lstrip())
+                      prefix = spaces if prefix is None else min(prefix, spaces)
+              if prefix:
+                  lines = [lines[0]] + [line[prefix:] if len(line) >= prefix else line for line in lines[1:]]
+              return '\n'.join(lines).rstrip() + '\n'
+
+          STATIC_HEADERS = {path: dedent_literal(header) for path, header in STATIC_HEADERS.items()}
+          JS_HEADERS = {path: dedent_literal(header) for path, header in JS_HEADERS.items()}
+
           def ensure_after(entries, anchor, value):
               if value in entries:
                   return entries
@@ -83,6 +185,22 @@ jobs:
               else:
                   entries.append(value)
               return entries
+
+          def replace_static_header(text, path):
+              header = STATIC_HEADERS[path]
+              marker = '# --- 锚点定义 (通用属性) ---'
+              idx = text.find(marker)
+              if idx == -1:
+                  raise RuntimeError(f'{path}: static header marker not found')
+              return header + '\n' + text[idx:]
+
+          def replace_js_header(text, path):
+              header = JS_HEADERS[path]
+              marker = '// --- 静态配置区域 ---'
+              idx = text.find(marker)
+              if idx == -1:
+                  raise RuntimeError(f'{path}: JS header marker not found')
+              return header + '\n' + text[idx:]
 
           def ensure_static_googlefcm_provider(text, path):
               if re.search(r'(?m)^  googlefcm:\s*$', text):
@@ -128,12 +246,9 @@ jobs:
 
           def patch_static(path):
               text = path.read_text(encoding='utf-8')
-
-              # googlefcm 必须始终存在，否则关闭 FCM 策略组或使用精简版时
-              # fake-ip-filter 引用 rule-set:googlefcm 会成为悬空引用。
+              text = replace_static_header(text, path)
               text = ensure_static_googlefcm_provider(text, path)
 
-              # FCM 使用动态 googlefcm rule-set + Google 官方 hostname 显式兜底。
               match = re.search(r"(?m)^  fake-ip-filter:\s*(\[[\s\S]*?\])", text)
               if not match:
                   raise RuntimeError(f'{path}: fake-ip-filter not found')
@@ -153,7 +268,13 @@ jobs:
               else:
                   text = text.replace('  fake-ip-filter:', comment + '\n  fake-ip-filter:', 1)
 
-              # 国内域名统一使用直连国内 DoH；兼容首次应用和已经优化后的状态。
+              # 第三种 DNS 方案：bootstrap/default、cn、geolocation-cn 全部使用国内 DoH。
+              default_ns = re.compile(r"(?m)^(\s*)default-nameserver:\s*\*(?:chinaDNS|chinaDohDNS)\s*$")
+              m = default_ns.search(text)
+              if not m:
+                  raise RuntimeError(f'{path}: default-nameserver not found')
+              text = default_ns.sub(r"\1default-nameserver: *chinaDohDNS", text, count=1)
+
               cn_policy = re.compile(r"(?m)^(\s*)'rule-set:cn':\s*\*(?:chinaDNS|chinaDohDNS)\s*$")
               m = cn_policy.search(text)
               if not m:
@@ -171,7 +292,6 @@ jobs:
                       1,
                   )
 
-              # 国外 QUIC 禁用时，以 geolocation-cn + cn_additional + cn_ip 共同判定国内流量。
               if QUIC_RULE not in text:
                   if OLD_QUIC_RULE not in text:
                       raise RuntimeError(f'{path}: QUIC rule not found')
@@ -181,11 +301,9 @@ jobs:
 
           def patch_js(path):
               text = path.read_text(encoding='utf-8')
-
-              # googlefcm 提升为基础 provider，保证 FCM 分流关闭时仍能被 DNS 引用。
+              text = replace_js_header(text, path)
               text = ensure_js_googlefcm_provider(text, path)
 
-              # FCM 使用动态 googlefcm rule-set + Google 官方 hostname 显式兜底。
               match = re.search(r"(?m)^(\s*)'fake-ip-filter':\s*\[([\s\S]*?)\]", text)
               if not match:
                   raise RuntimeError(f'{path}: fake-ip-filter not found')
@@ -209,9 +327,10 @@ jobs:
               text = text[:match.start()] + rebuilt + text[match.end():]
 
               comment = indent + '// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底'
-              block_start = text.rfind('\n', 0, text.find("'fake-ip-filter':")) + 1
+              block_pos = text.find("'fake-ip-filter':")
+              block_start = text.rfind('\n', 0, block_pos) + 1
               before = text[:block_start]
-              old_comment = re.compile(r'(?m)^\s*// FCM .*$', re.M)
+              old_comment = re.compile(r'(?m)^\s*// FCM .*$')
               if old_comment.search(before[-300:]):
                   start = max(0, len(before) - 300)
                   tail = old_comment.sub(comment, before[start:], count=1)
@@ -219,7 +338,12 @@ jobs:
               else:
                   text = text[:block_start] + comment + '\n' + text[block_start:]
 
-              # 国内域名走直连国内 DoH；兼容首次应用和已经优化后的状态。
+              # 第三种 DNS 方案：bootstrap/default、cn、geolocation-cn 全部使用国内 DoH。
+              default_ns = re.compile(r"(?m)^(\s*)'default-nameserver':\s*(?:chinaDNS|chinaDohDNS),\s*$")
+              if not default_ns.search(text):
+                  raise RuntimeError(f'{path}: default-nameserver not found')
+              text = default_ns.sub(r"\1'default-nameserver': chinaDohDNS,", text, count=1)
+
               cn_policy = re.compile(r"(?m)^(\s*)'rule-set:cn':\s*(?:chinaDNS|chinaDohDNS),\s*$")
               m = cn_policy.search(text)
               if not m:
@@ -241,7 +365,6 @@ jobs:
                       1,
                   )
 
-              # 国内 QUIC 判定补充 geolocation-cn。
               if QUIC_RULE not in text:
                   if OLD_QUIC_RULE not in text:
                       raise RuntimeError(f'{path}: QUIC rule not found')
@@ -254,9 +377,10 @@ jobs:
           for file in JS_FILES:
               patch_js(file)
 
-          # 强校验：四份文件必须同时具备动态 FCM rule-set、显式兜底、China QUIC 和 China DoH。
           for path in STATIC_FILES + JS_FILES:
               text = path.read_text(encoding='utf-8')
+              if 'NetWeave' not in text.splitlines()[1]:
+                  raise RuntimeError(f'{path}: NetWeave header was not preserved')
               if GOOGLEFCM_RULESET not in text:
                   raise RuntimeError(f'{path}: missing {GOOGLEFCM_RULESET} in fake-ip-filter')
               if GOOGLEFCM_URL not in text:
@@ -266,11 +390,32 @@ jobs:
                       raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
               if QUIC_RULE not in text:
                   raise RuntimeError(f'{path}: missing protected China QUIC rule')
-              if 'rule-set:geolocation-cn' not in text or 'chinaDohDNS' not in text:
-                  raise RuntimeError(f'{path}: missing protected China DoH policy')
+              if 'chinaDohDNS' not in text:
+                  raise RuntimeError(f'{path}: missing China DoH definition/use')
 
-          print('Downstream googlefcm, FCM fallback, China QUIC and China DoH optimizations verified for all four files')
+              if path.suffix == '.yaml':
+                  required = [
+                      'default-nameserver: *chinaDohDNS',
+                      "'rule-set:cn': *chinaDohDNS",
+                      "'rule-set:geolocation-cn': *chinaDohDNS",
+                  ]
+              else:
+                  required = [
+                      "'default-nameserver': chinaDohDNS,",
+                      "'rule-set:cn': chinaDohDNS,",
+                      "'rule-set:geolocation-cn': chinaDohDNS,",
+                  ]
+              for item in required:
+                  if item not in text:
+                      raise RuntimeError(f'{path}: missing protected DNS setting {item}')
+
+          print('NetWeave downstream patches verified for all four files')
           PY
+
+      - name: Run integration tests
+        run: |
+          npm --prefix Test install
+          node Test/run-tests.js
 
       - name: Commit protected downstream changes
         run: |
@@ -278,7 +423,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "Downstream optimizations already intact"
           else
-            git commit -m "perf: preserve FCM rule-set, China QUIC and DoH optimizations"
+            git commit -m "perf: preserve NetWeave downstream optimizations"
           fi
 
       - name: Push
