@@ -10,6 +10,7 @@ on:
     paths:
       - '.github/workflows/sync-upstream.yaml'
       - '.github/scripts/preserve_downstream.py'
+      - '.github/scripts/preserve_service_groups.py'
 
 permissions:
   contents: write
@@ -80,7 +81,9 @@ jobs:
           git commit --no-edit
 
       - name: Preserve downstream customizations
-        run: python3 .github/scripts/preserve_downstream.py
+        run: |
+          python3 .github/scripts/preserve_downstream.py
+          python3 .github/scripts/preserve_service_groups.py
 
       - name: Run integration tests
         run: |
