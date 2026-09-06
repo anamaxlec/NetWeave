@@ -121,8 +121,7 @@ def patch_js():
             ),
         ),
     ]
-    # 逆序插入同一个 Google 锚点，最终顺序保持 Gemini → OpenAI → Anthropic → GitHub → Google。
-    for name, block in reversed(services):
+    for name, block in services:
         text = ensure_js_service(text, name, block)
 
     text = detach_github_from_microsoft_js(text)
@@ -189,17 +188,16 @@ def patch_static():
         ('Anthropic', static_group_block('Anthropic', 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png', '美国')),
         ('GitHub', static_group_block('GitHub', 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png')),
     ]
-    for name, block in reversed(groups):
+    for name, block in groups:
         text = ensure_static_group(text, name, block)
 
-    # GitHub 原来直接指向默认代理；改为独立策略组。
     text = text.replace('  - RULE-SET,github,默认代理\n', '')
-    for rule in reversed([
+    for rule in [
         'RULE-SET,google_gemini,Gemini',
         'RULE-SET,openai,OpenAI',
         'RULE-SET,anthropic,Anthropic',
         'RULE-SET,github,GitHub',
-    ]):
+    ]:
         text = ensure_rule_before_google(text, rule)
 
     FULL_STATIC.write_text(text, encoding='utf-8')
