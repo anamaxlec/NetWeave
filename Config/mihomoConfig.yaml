@@ -214,6 +214,21 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/youtube.mrs'
     path: './ruleset/youtube.mrs'
     path-in-bundle: 'geo/geosite/youtube.mrs'
+  google_gemini:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google-gemini.mrs'
+    path: './ruleset/google_gemini.mrs'
+    path-in-bundle: 'geo/geosite/google-gemini.mrs'
+  openai:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/openai.mrs'
+    path: './ruleset/openai.mrs'
+    path-in-bundle: 'geo/geosite/openai.mrs'
+  anthropic:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/anthropic.mrs'
+    path: './ruleset/anthropic.mrs'
+    path-in-bundle: 'geo/geosite/anthropic.mrs'
   google:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google.mrs'
@@ -513,6 +528,25 @@ proxy-groups:
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/MiToverG422/Qure@master/IconSet/Color/YouTube.png'
 
+  - name: 'Gemini'
+    default-selected: '美国'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png'
+
+  - name: 'OpenAI'
+    default-selected: '美国'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png'
+
+  - name: 'Anthropic'
+    default-selected: '美国'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png'
+
+  - name: 'GitHub'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png'
+
   - name: 'Google'
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png'
@@ -675,10 +709,13 @@ rules:
   # 代理规则
   - RULE-SET,googlefcm,FCM
   - RULE-SET,youtube,YouTube
+  - RULE-SET,google_gemini,Gemini
+  - RULE-SET,openai,OpenAI
+  - RULE-SET,anthropic,Anthropic
+  - RULE-SET,github,GitHub
   - RULE-SET,google,Google
   - RULE-SET,google_ip,Google,no-resolve
   - RULE-SET,ai,AI
-  - RULE-SET,github,默认代理
   - RULE-SET,microsoft,Microsoft
   - RULE-SET,apple,Apple
   - RULE-SET,telegram,Telegram

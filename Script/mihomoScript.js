@@ -27,6 +27,10 @@ const ruleOptionsEnable = {
   // 以下为分流策略配置
   FCM: true, // GoogleFCM服务
   YouTube: true, // YouTube视频平台
+  Gemini: true, // Google Gemini / AI Studio / NotebookLM 等
+  OpenAI: true, // OpenAI / ChatGPT / Codex
+  Anthropic: true, // Anthropic / Claude
+  GitHub: true, // GitHub / Copilot
   Google: true, // Google服务
   AI: true, // 国外AI服务
   Microsoft: true, // Microsoft服务
@@ -394,6 +398,65 @@ const serviceConfigs = [
     rules: ['RULE-SET,youtube,YouTube'],
   },
   {
+    name: 'Gemini',
+    baseOption: selectBaseOption,
+    defaultSelected: '美国',
+    providers: {
+      google_gemini: {
+        ...ruleProviderCommonDomain,
+        url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google-gemini.mrs',
+        path: './ruleset/google_gemini.mrs',
+        'path-in-bundle': 'geo/geosite/google-gemini.mrs',
+      },
+    },
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png',
+    rules: ['RULE-SET,google_gemini,Gemini'],
+  },
+  {
+    name: 'OpenAI',
+    baseOption: selectBaseOption,
+    defaultSelected: '美国',
+    providers: {
+      openai: {
+        ...ruleProviderCommonDomain,
+        url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/openai.mrs',
+        path: './ruleset/openai.mrs',
+        'path-in-bundle': 'geo/geosite/openai.mrs',
+      },
+    },
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
+    rules: ['RULE-SET,openai,OpenAI'],
+  },
+  {
+    name: 'Anthropic',
+    baseOption: selectBaseOption,
+    defaultSelected: '美国',
+    providers: {
+      anthropic: {
+        ...ruleProviderCommonDomain,
+        url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/anthropic.mrs',
+        path: './ruleset/anthropic.mrs',
+        'path-in-bundle': 'geo/geosite/anthropic.mrs',
+      },
+    },
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
+    rules: ['RULE-SET,anthropic,Anthropic'],
+  },
+  {
+    name: 'GitHub',
+    baseOption: selectBaseOption,
+    providers: {
+      github: {
+        ...ruleProviderCommonDomain,
+        url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/github.mrs',
+        path: './ruleset/github.mrs',
+        'path-in-bundle': 'geo/geosite/github.mrs',
+      },
+    },
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png',
+    rules: ['RULE-SET,github,GitHub'],
+  },
+  {
     name: 'Google',
     baseOption: selectBaseOption,
     providers: {
@@ -433,12 +496,6 @@ const serviceConfigs = [
     baseOption: selectBaseOption,
     direct: true,
     providers: {
-      github: {
-        ...ruleProviderCommonDomain,
-        url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/github.mrs',
-        path: './ruleset/github.mrs',
-        'path-in-bundle': 'geo/geosite/github.mrs',
-      },
       microsoft: {
         ...ruleProviderCommonDomain,
         url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/microsoft.mrs',
@@ -447,7 +504,7 @@ const serviceConfigs = [
       },
     },
     icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Microsoft.png',
-    rules: ['RULE-SET,github,默认代理', 'RULE-SET,microsoft,Microsoft'],
+    rules: ['RULE-SET,microsoft,Microsoft'],
   },
   {
     name: 'Apple',
