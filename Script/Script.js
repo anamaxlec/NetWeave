@@ -1,12 +1,12 @@
 /**
- * NetWeave - mihomo配置覆写脚本（精简版）
- * 维护：anamaxlec
- * 原作者：AIsouler
- * 项目仓库：https://github.com/anamaxlec/NetWeave
- * 脚本链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Script/Script.js
- * 上游项目：https://github.com/AIsouler/MyClash
- * 友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
- */
+* NetWeave - mihomo配置覆写脚本（精简版）
+* 维护：anamaxlec
+* 原作者：AIsouler
+* 项目仓库：https://github.com/anamaxlec/NetWeave
+* 脚本链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Script/Script.js
+* 上游项目：https://github.com/AIsouler/MyClash
+* 友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
+*/
 
 // --- 静态配置区域 ---
 
