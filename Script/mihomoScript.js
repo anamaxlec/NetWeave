@@ -40,7 +40,6 @@ const ruleOptionsEnable = {
   Emby: true, // Emby媒体服务
   PikPak: true, // PikPak网盘服务
   Spotify: true, // Spotify音乐服务
-  Crypto: true, // 加密货币相关服务
   EHentai: true, // E-Hentai网站
   AdBlock: true, // 广告拦截
 
@@ -650,21 +649,6 @@ const serviceConfigs = [
     },
     icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Spotify.png',
     rules: ['RULE-SET,spotify,Spotify', 'RULE-SET,spotify_ip,Spotify,no-resolve'],
-  },
-  {
-    name: 'Crypto',
-    baseOption: selectBaseOption,
-    defaultSelected: '日本',
-    providers: {
-      cryptocurrency: {
-        ...ruleProviderCommonDomain,
-        url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/category-cryptocurrency.mrs',
-        path: './ruleset/cryptocurrency.mrs',
-        'path-in-bundle': 'geo/geosite/category-cryptocurrency.mrs',
-      },
-    },
-    icon: 'https://fastly.jsdelivr.net/gh/lige47/QuanX-icon-rule@main/icon/04ProxySoft/Bitcoin.png',
-    rules: ['RULE-SET,cryptocurrency,Crypto'],
   },
   {
     name: 'EHentai',

@@ -324,11 +324,6 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geoip/spotify.mrs'
     path: './ruleset/spotify_ip.mrs'
     path-in-bundle: 'geo/geoip/spotify.mrs'
-  cryptocurrency:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/category-cryptocurrency.mrs'
-    path: './ruleset/cryptocurrency.mrs'
-    path-in-bundle: 'geo/geosite/category-cryptocurrency.mrs'
   ehentai:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/ehentai.mrs'
@@ -572,11 +567,6 @@ proxy-groups:
     <<: [*group_common_select, *proxies_direct]
     icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Spotify.png'
 
-  - name: 'Crypto'
-    default-selected: '日本'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/lige47/QuanX-icon-rule@main/icon/04ProxySoft/Bitcoin.png'
-
   - name: 'EHentai'
     default-selected: '美国'
     <<: [*group_common_select, *proxies_default]
@@ -717,7 +707,6 @@ rules:
   - RULE-SET,pikpak,PikPak
   - RULE-SET,spotify,Spotify
   - RULE-SET,spotify_ip,Spotify,no-resolve
-  - RULE-SET,cryptocurrency,Crypto
   - RULE-SET,ehentai,EHentai
 
   # 兜底规则
