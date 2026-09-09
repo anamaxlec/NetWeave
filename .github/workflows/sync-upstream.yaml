@@ -9,7 +9,6 @@ on:
     branches: ['main']
     paths:
       - '.github/workflows/sync-upstream.yaml'
-      - '.github/scripts/normalize_fakeip_filter.py'
       - '.github/scripts/preserve_downstream.py'
       - '.github/scripts/preserve_service_groups.py'
 
@@ -61,7 +60,7 @@ jobs:
                 git checkout --ours -- "$file"
                 ;;
               Config/mihomoConfig.yaml|Config/mihomoConfigLite.yaml|Script/Script.js|Script/mihomoScript.js)
-                # 核心文件先采用上游最新结构，再统一重放 NetWeave patch。
+                # 核心文件先采用上游最新结构，再统一重放 NetWeave 的最小语义 patch。
                 git checkout --theirs -- "$file"
                 ;;
               *)
@@ -83,12 +82,34 @@ jobs:
 
       - name: Preserve downstream customizations
         run: |
-          python3 .github/scripts/normalize_fakeip_filter.py
           python3 .github/scripts/preserve_downstream.py
           python3 .github/scripts/preserve_service_groups.py
 
-      - name: Validate generated JavaScript syntax
+      - name: Verify downstream patches are idempotent
+        shell: bash
         run: |
+          set -euo pipefail
+          files=(
+            Config/mihomoConfig.yaml
+            Config/mihomoConfigLite.yaml
+            Script/Script.js
+            Script/mihomoScript.js
+          )
+
+          git diff -- "${files[@]}" > /tmp/netweave-before.diff
+          python3 .github/scripts/preserve_downstream.py
+          python3 .github/scripts/preserve_service_groups.py
+          git diff -- "${files[@]}" > /tmp/netweave-after.diff
+
+          if ! cmp -s /tmp/netweave-before.diff /tmp/netweave-after.diff; then
+            echo "::error::Downstream patches are not idempotent"
+            diff -u /tmp/netweave-before.diff /tmp/netweave-after.diff || true
+            exit 1
+          fi
+
+      - name: Validate generated configuration
+        run: |
+          git diff --check
           node --check Script/Script.js
           node --check Script/mihomoScript.js
 
