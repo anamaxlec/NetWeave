@@ -32,6 +32,7 @@ GOOGLEFCM_RULESET = 'rule-set:googlefcm'
 GOOGLEFCM_URL = 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/googlefcm.mrs'
 QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
 OLD_QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
+FAKE_IP_COMMENT = '// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底'
 
 STATIC_HEADERS = {
     Path('Config/mihomoConfig.yaml'): """#  ---------说明---------
@@ -181,7 +182,7 @@ def remove_crypto_js(text):
 
 
 def patch_static_fake_ip_filter(text, path):
-    # 静态 YAML 没有可复用的 JS 常量，保留显式 hostname；只重建这一小段 DNS 字段。
+    # 静态 YAML 没有可复用的 JS 常量，保留显式 hostname；输出保持 Prettier 稳定格式。
     text = re.sub(r'(?m)^  # FCM .*\n', '', text)
     start = text.find('  fake-ip-filter:')
     end = text.find('  proxy-server-nameserver:', start)
@@ -196,7 +197,8 @@ def patch_static_fake_ip_filter(text, path):
 
     rebuilt = (
         '  # FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底\n'
-        '  fake-ip-filter: [\n'
+        '  fake-ip-filter:\n'
+        '    [\n'
         + ''.join(f"      '{entry}',\n" for entry in entries)
         + '    ]\n'
     )
@@ -235,7 +237,7 @@ def patch_js_fake_ip_filter(text, path):
         return f"{match.group('indent')}'rule-set:googlefcm',"
 
     text = CONDITIONAL_GOOGLEFCM.sub(normalize_conditional, text)
-    text = re.sub(r'(?m)^\s*// FCM .*\n', '', text)
+    text = re.sub(rf'(?m)^[ \t]*{re.escape(FAKE_IP_COMMENT)}\n', '', text)
 
     marker = "'fake-ip-filter': ["
     pos = text.find(marker)
@@ -274,7 +276,7 @@ def patch_js_fake_ip_filter(text, path):
 
     spread_indent = re.match(r'\s*', text[spread_line_start:spread_pos]).group(0)
     rebuilt = ''.join(filtered_lines) + f'{spread_indent}...fcmRealIpFallback,\n'
-    comment = f'{item_indent[:-2]}// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底\n'
+    comment = f'{item_indent[:-2]}{FAKE_IP_COMMENT}\n'
     return text[:line_start] + comment + rebuilt + text[spread_line_start:]
 
 
