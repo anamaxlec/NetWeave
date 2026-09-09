@@ -1,204 +1,196 @@
 from pathlib import Path
-import re
 
 FULL_JS = Path('Script/mihomoScript.js')
 FULL_STATIC = Path('Config/mihomoConfig.yaml')
 
-PROVIDERS = {
-    'google_gemini': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google-gemini.mrs',
-    'openai': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/openai.mrs',
-    'anthropic': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/anthropic.mrs',
-    'github': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/github.mrs',
-}
+SERVICES = [
+    {
+        'name': 'Gemini',
+        'provider': 'google_gemini',
+        'url': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google-gemini.mrs',
+        'comment': 'Google Gemini / AI Studio / NotebookLM 等',
+        'icon': 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png',
+        'default': '美国',
+    },
+    {
+        'name': 'OpenAI',
+        'provider': 'openai',
+        'url': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/openai.mrs',
+        'comment': 'OpenAI / ChatGPT / Codex',
+        'icon': 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
+        'default': '美国',
+    },
+    {
+        'name': 'Anthropic',
+        'provider': 'anthropic',
+        'url': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/anthropic.mrs',
+        'comment': 'Anthropic / Claude',
+        'icon': 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
+        'default': '美国',
+    },
+    {
+        'name': 'GitHub',
+        'provider': 'github',
+        'url': 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/github.mrs',
+        'comment': 'GitHub / Copilot',
+        'icon': 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png',
+        'default': None,
+    },
+]
 
 
-def ensure_js_option(text, name, comment):
-    if re.search(rf'(?m)^  {re.escape(name)}:\s*true,', text):
+def ensure_js_option(text, service):
+    name = service['name']
+    if f'  {name}: true,' in text:
         return text
-    marker = re.search(r'(?m)^  Google:\s*true,.*$', text)
-    if not marker:
-        raise RuntimeError('mihomoScript.js: Google option marker not found')
-    line = f'  {name}: true, // {comment}\n'
-    return text[:marker.start()] + line + text[marker.start():]
+
+    marker = '  Google: true,'
+    idx = text.find(marker)
+    if idx == -1:
+        raise RuntimeError(f'mihomoScript.js: Google option marker not found for {name}')
+
+    line = f"  {name}: true, // {service['comment']}\n"
+    return text[:idx] + line + text[idx:]
 
 
-def js_service_block(name, provider, url, icon, default_selected=None):
-    default_line = f"    defaultSelected: '{default_selected}',\n" if default_selected else ''
+def js_service_block(service):
+    default_line = f"    defaultSelected: '{service['default']}',\n" if service['default'] else ''
+    filename = service['url'].rsplit('/', 1)[-1]
     return (
         "  {\n"
-        f"    name: '{name}',\n"
+        f"    name: '{service['name']}',\n"
         "    baseOption: selectBaseOption,\n"
         f"{default_line}"
         "    providers: {\n"
-        f"      {provider}: {{\n"
+        f"      {service['provider']}: {{\n"
         "        ...ruleProviderCommonDomain,\n"
-        f"        url: '{url}',\n"
-        f"        path: './ruleset/{provider}.mrs',\n"
-        f"        'path-in-bundle': 'geo/geosite/{url.rsplit('/', 1)[-1]}',\n"
+        f"        url: '{service['url']}',\n"
+        f"        path: './ruleset/{service['provider']}.mrs',\n"
+        f"        'path-in-bundle': 'geo/geosite/{filename}',\n"
         "      },\n"
         "    },\n"
-        f"    icon: '{icon}',\n"
-        f"    rules: ['RULE-SET,{provider},{name}'],\n"
+        f"    icon: '{service['icon']}',\n"
+        f"    rules: ['RULE-SET,{service['provider']},{service['name']}'],\n"
         "  },\n"
     )
 
 
-def ensure_js_service(text, name, block):
-    if re.search(rf"(?m)^    name: '{re.escape(name)}',$", text):
+def ensure_js_service(text, service):
+    if f"    name: '{service['name']}'," in text:
         return text
-    marker = re.search(r"(?m)^  \{\n    name: 'Google',\n", text)
-    if not marker:
-        raise RuntimeError(f'mihomoScript.js: insertion point for {name} not found')
-    return text[:marker.start()] + block + text[marker.start():]
+
+    marker = "  {\n    name: 'Google',\n"
+    idx = text.find(marker)
+    if idx == -1:
+        raise RuntimeError(f"mihomoScript.js: Google service marker not found for {service['name']}")
+    return text[:idx] + js_service_block(service) + text[idx:]
 
 
 def detach_github_from_microsoft_js(text):
-    match = re.search(
-        r"(?ms)^  \{\n    name: 'Microsoft',\n.*?^  \},\n(?=  \{\n    name: 'Apple',)",
-        text,
+    start_marker = "  {\n    name: 'Microsoft',\n"
+    end_marker = "  {\n    name: 'Apple',\n"
+    start = text.find(start_marker)
+    end = text.find(end_marker, start)
+    if start == -1 or end == -1:
+        raise RuntimeError('mihomoScript.js: Microsoft/Apple service markers not found')
+
+    block = text[start:end]
+    github = next(service for service in SERVICES if service['name'] == 'GitHub')
+    github_provider = (
+        f"      {github['provider']}: {{\n"
+        "        ...ruleProviderCommonDomain,\n"
+        f"        url: '{github['url']}',\n"
+        f"        path: './ruleset/{github['provider']}.mrs',\n"
+        f"        'path-in-bundle': 'geo/geosite/{github['url'].rsplit('/', 1)[-1]}',\n"
+        "      },\n"
     )
-    if not match:
-        raise RuntimeError('mihomoScript.js: Microsoft service block not found')
-    block = match.group(0)
-    block = re.sub(
-        r"(?ms)^      github: \{\n.*?^      \},\n(?=      microsoft:)",
-        '',
-        block,
-        count=1,
-    )
+
+    block = block.replace(github_provider, '', 1)
     block = block.replace(
-        "rules: ['RULE-SET,github,默认代理', 'RULE-SET,microsoft,Microsoft']",
-        "rules: ['RULE-SET,microsoft,Microsoft']",
+        "    rules: ['RULE-SET,github,默认代理', 'RULE-SET,microsoft,Microsoft'],\n",
+        "    rules: ['RULE-SET,microsoft,Microsoft'],\n",
+        1,
     )
-    return text[:match.start()] + block + text[match.end():]
+    return text[:start] + block + text[end:]
 
 
 def patch_js():
     text = FULL_JS.read_text(encoding='utf-8')
-    text = ensure_js_option(text, 'Gemini', 'Google Gemini / AI Studio / NotebookLM 等')
-    text = ensure_js_option(text, 'OpenAI', 'OpenAI / ChatGPT / Codex')
-    text = ensure_js_option(text, 'Anthropic', 'Anthropic / Claude')
-    text = ensure_js_option(text, 'GitHub', 'GitHub / Copilot')
-
-    services = [
-        (
-            'Gemini',
-            js_service_block(
-                'Gemini',
-                'google_gemini',
-                PROVIDERS['google_gemini'],
-                'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png',
-                '美国',
-            ),
-        ),
-        (
-            'OpenAI',
-            js_service_block(
-                'OpenAI',
-                'openai',
-                PROVIDERS['openai'],
-                'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
-                '美国',
-            ),
-        ),
-        (
-            'Anthropic',
-            js_service_block(
-                'Anthropic',
-                'anthropic',
-                PROVIDERS['anthropic'],
-                'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
-                '美国',
-            ),
-        ),
-        (
-            'GitHub',
-            js_service_block(
-                'GitHub',
-                'github',
-                PROVIDERS['github'],
-                'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png',
-            ),
-        ),
-    ]
-    for name, block in services:
-        text = ensure_js_service(text, name, block)
+    for service in SERVICES:
+        text = ensure_js_option(text, service)
+    for service in SERVICES:
+        text = ensure_js_service(text, service)
 
     text = detach_github_from_microsoft_js(text)
     FULL_JS.write_text(text, encoding='utf-8')
 
 
-def static_provider_block(name, url):
-    filename = url.rsplit('/', 1)[-1]
+def static_provider_block(service):
+    filename = service['url'].rsplit('/', 1)[-1]
     return (
-        f"  {name}:\n"
+        f"  {service['provider']}:\n"
         "    <<: *rule_providers_domain\n"
-        f"    url: '{url}'\n"
-        f"    path: './ruleset/{name}.mrs'\n"
+        f"    url: '{service['url']}'\n"
+        f"    path: './ruleset/{service['provider']}.mrs'\n"
         f"    path-in-bundle: 'geo/geosite/{filename}'\n"
     )
 
 
-def ensure_static_provider(text, name, url):
-    if re.search(rf'(?m)^  {re.escape(name)}:\s*$', text):
+def ensure_static_provider(text, service):
+    marker = f"  {service['provider']}:\n"
+    if marker in text:
         return text
-    marker = re.search(r'(?m)^  google:\s*$', text)
-    if not marker:
-        raise RuntimeError(f'mihomoConfig.yaml: provider insertion point for {name} not found')
-    return text[:marker.start()] + static_provider_block(name, url) + text[marker.start():]
+
+    google_marker = '  google:\n'
+    idx = text.find(google_marker)
+    if idx == -1:
+        raise RuntimeError(f"mihomoConfig.yaml: Google provider marker not found for {service['name']}")
+    return text[:idx] + static_provider_block(service) + text[idx:]
 
 
-def static_group_block(name, icon, default_selected=None):
-    default_line = f"    default-selected: '{default_selected}'\n" if default_selected else ''
+def static_group_block(service):
+    default_line = f"    default-selected: '{service['default']}'\n" if service['default'] else ''
     return (
-        f"  - name: '{name}'\n"
+        f"  - name: '{service['name']}'\n"
         f"{default_line}"
         "    <<: [*group_common_select, *proxies_default]\n"
-        f"    icon: '{icon}'\n\n"
+        f"    icon: '{service['icon']}'\n\n"
     )
 
 
-def ensure_static_group(text, name, block):
-    if re.search(rf"(?m)^  - name: '{re.escape(name)}'$", text):
+def ensure_static_group(text, service):
+    if f"  - name: '{service['name']}'\n" in text:
         return text
-    marker = re.search(r"(?m)^  - name: 'Google'$", text)
-    if not marker:
-        raise RuntimeError(f'mihomoConfig.yaml: group insertion point for {name} not found')
-    return text[:marker.start()] + block + text[marker.start():]
+
+    marker = "  - name: 'Google'\n"
+    idx = text.find(marker)
+    if idx == -1:
+        raise RuntimeError(f"mihomoConfig.yaml: Google group marker not found for {service['name']}")
+    return text[:idx] + static_group_block(service) + text[idx:]
 
 
-def ensure_rule_before_google(text, rule):
-    line = f'  - {rule}\n'
+def ensure_rule_before_google(text, service):
+    line = f"  - RULE-SET,{service['provider']},{service['name']}\n"
     if line in text:
         return text
+
     marker = '  - RULE-SET,google,Google\n'
-    if marker not in text:
-        raise RuntimeError(f'mihomoConfig.yaml: Google rule insertion point missing for {rule}')
-    return text.replace(marker, line + marker, 1)
+    idx = text.find(marker)
+    if idx == -1:
+        raise RuntimeError(f"mihomoConfig.yaml: Google rule marker not found for {service['name']}")
+    return text[:idx] + line + text[idx:]
 
 
 def patch_static():
     text = FULL_STATIC.read_text(encoding='utf-8')
-    for name in ['google_gemini', 'openai', 'anthropic']:
-        text = ensure_static_provider(text, name, PROVIDERS[name])
-
-    groups = [
-        ('Gemini', static_group_block('Gemini', 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png', '美国')),
-        ('OpenAI', static_group_block('OpenAI', 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png', '美国')),
-        ('Anthropic', static_group_block('Anthropic', 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png', '美国')),
-        ('GitHub', static_group_block('GitHub', 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png')),
-    ]
-    for name, block in groups:
-        text = ensure_static_group(text, name, block)
+    for service in SERVICES:
+        text = ensure_static_provider(text, service)
+    for service in SERVICES:
+        text = ensure_static_group(text, service)
 
     text = text.replace('  - RULE-SET,github,默认代理\n', '')
-    for rule in [
-        'RULE-SET,google_gemini,Gemini',
-        'RULE-SET,openai,OpenAI',
-        'RULE-SET,anthropic,Anthropic',
-        'RULE-SET,github,GitHub',
-    ]:
-        text = ensure_rule_before_google(text, rule)
+    for service in SERVICES:
+        text = ensure_rule_before_google(text, service)
 
     FULL_STATIC.write_text(text, encoding='utf-8')
 
@@ -209,27 +201,29 @@ patch_static()
 js = FULL_JS.read_text(encoding='utf-8')
 yaml = FULL_STATIC.read_text(encoding='utf-8')
 
-for name, provider in [('Gemini', 'google_gemini'), ('OpenAI', 'openai'), ('Anthropic', 'anthropic'), ('GitHub', 'github')]:
-    if f"name: '{name}'" not in js or f"{name}: true" not in js:
+for service in SERVICES:
+    name = service['name']
+    provider = service['provider']
+    if f"name: '{name}'" not in js or f'{name}: true' not in js:
         raise RuntimeError(f'mihomoScript.js: missing {name} option/group')
-    if f"RULE-SET,{provider},{name}" not in js:
+    if f'RULE-SET,{provider},{name}' not in js:
         raise RuntimeError(f'mihomoScript.js: missing {name} rule')
-    if f"- name: '{name}'" not in yaml or f"RULE-SET,{provider},{name}" not in yaml:
+    if f"- name: '{name}'" not in yaml or f'RULE-SET,{provider},{name}' not in yaml:
         raise RuntimeError(f'mihomoConfig.yaml: missing {name} group/rule')
-
-for name in ['google_gemini', 'openai', 'anthropic']:
-    if PROVIDERS[name] not in js or PROVIDERS[name] not in yaml:
+    if service['url'] not in js or service['url'] not in yaml:
         raise RuntimeError(f'missing provider URL for {name}')
 
 if 'RULE-SET,github,默认代理' in js or 'RULE-SET,github,默认代理' in yaml:
     raise RuntimeError('GitHub is still routed directly to 默认代理')
 
-js_order = [js.index("name: 'Gemini'"), js.index("name: 'OpenAI'"), js.index("name: 'Anthropic'"), js.index("name: 'GitHub'"), js.index("name: 'Google'"), js.index("name: 'AI'")]
+js_order = [js.index(f"name: '{service['name']}'") for service in SERVICES]
+js_order.extend([js.index("name: 'Google'"), js.index("name: 'AI'")])
 if js_order != sorted(js_order):
     raise RuntimeError('mihomoScript.js: dedicated service order is incorrect')
 
-yaml_rule_order = [yaml.index('RULE-SET,google_gemini,Gemini'), yaml.index('RULE-SET,openai,OpenAI'), yaml.index('RULE-SET,anthropic,Anthropic'), yaml.index('RULE-SET,github,GitHub'), yaml.index('RULE-SET,google,Google'), yaml.index('RULE-SET,ai,AI')]
+yaml_rule_order = [yaml.index(f"RULE-SET,{service['provider']},{service['name']}") for service in SERVICES]
+yaml_rule_order.extend([yaml.index('RULE-SET,google,Google'), yaml.index('RULE-SET,ai,AI')])
 if yaml_rule_order != sorted(yaml_rule_order):
     raise RuntimeError('mihomoConfig.yaml: dedicated rule order is incorrect')
 
-print('Dedicated Gemini/OpenAI/Anthropic/GitHub groups verified')
+print('Dedicated Gemini/OpenAI/Anthropic/GitHub groups verified with minimal patches')
