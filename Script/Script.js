@@ -1172,8 +1172,6 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
     'fake-ip-range': '198.18.0.1/15',
     'fake-ip-range6': '2001:2::1/48',
     // FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
-    // FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
-    // FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
     'fake-ip-filter': [
       'rule-set:private',
       'rule-set:fakeip_filter',
