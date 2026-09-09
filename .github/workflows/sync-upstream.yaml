@@ -9,6 +9,7 @@ on:
     branches: ['main']
     paths:
       - '.github/workflows/sync-upstream.yaml'
+      - '.github/scripts/normalize_fakeip_filter.py'
       - '.github/scripts/preserve_downstream.py'
       - '.github/scripts/preserve_service_groups.py'
 
@@ -82,8 +83,14 @@ jobs:
 
       - name: Preserve downstream customizations
         run: |
+          python3 .github/scripts/normalize_fakeip_filter.py
           python3 .github/scripts/preserve_downstream.py
           python3 .github/scripts/preserve_service_groups.py
+
+      - name: Validate generated JavaScript syntax
+        run: |
+          node --check Script/Script.js
+          node --check Script/mihomoScript.js
 
       - name: Run integration tests
         run: |
