@@ -92,6 +92,7 @@ const excludeFilter =
 const blockForeignQuic = [
   'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT',
 ];
+// FCM real-IP 显式兜底；googlefcm rule-set 负责动态覆盖。
 const fcmRealIpFallback = [
   'mtalk.google.com',
   'mtalk4.google.com',
