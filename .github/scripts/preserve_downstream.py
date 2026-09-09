@@ -182,7 +182,7 @@ def remove_crypto_js(text):
 
 def patch_static_fake_ip_filter(text, path):
     # 静态 YAML 没有可复用的 JS 常量，保留显式 hostname；只重建这一小段 DNS 字段。
-    text = re.sub(r'(?m)^  # FCM .*\n', '', text, count=1)
+    text = re.sub(r'(?m)^  # FCM .*\n', '', text)
     start = text.find('  fake-ip-filter:')
     end = text.find('  proxy-server-nameserver:', start)
     if start == -1 or end == -1:
@@ -235,7 +235,7 @@ def patch_js_fake_ip_filter(text, path):
         return f"{match.group('indent')}'rule-set:googlefcm',"
 
     text = CONDITIONAL_GOOGLEFCM.sub(normalize_conditional, text)
-    text = re.sub(r'(?m)^\s*// FCM .*\n', '', text, count=1)
+    text = re.sub(r'(?m)^\s*// FCM .*\n', '', text)
 
     marker = "'fake-ip-filter': ["
     pos = text.find(marker)
