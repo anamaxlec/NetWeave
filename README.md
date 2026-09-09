@@ -20,6 +20,8 @@ rule-set:googlefcm
 
 同时保留 Google 官方 FCM / Android 推送链路 hostname 作为显式兜底，形成“动态规则集 + 官方域名列表”的双保险，减少 fake-ip 对长连接、注册和重连流程的干扰。
 
+脚本版按上游当前的声明式数组组合风格组织：显式 hostname 统一定义为 `fcmRealIpFallback`，再通过 spread 合并到 `fake-ip-filter`；静态 YAML 则保留等价的显式条目。
+
 当前显式保护的域名包括：
 
 ```text
@@ -91,7 +93,22 @@ Cloudflare DoH / Google DoH
 
 `direct-nameserver` 仍保留 `system` 与国内普通 DNS 作为 DIRECT 场景的兼容回退，因此这里描述的是主要解析路径，并不宣称所有可能的 DNS 查询都绝对不会使用明文解析器。
 
-### 4. 自动同步上游并保护本地优化
+### 4. 具体服务优先于 geolocation-cn 兜底
+
+全量版新增并独立维护以下策略组：
+
+- `Gemini`
+- `OpenAI`
+- `Anthropic`
+- `GitHub`
+
+对应规则放在 `Google` / 通用 `AI` 等大类规则之前；`geolocation-cn → 直连` 则保留在业务分流之后作为兜底，而不是提前作为总入口。
+
+这样即使某个全球服务域名未来被通用中国 geosite 规则误分类，Gemini / Google / OpenAI 等更具体的服务规则仍有机会先命中，降低类似 `gstatic.com` 被错误直连的风险。
+
+`Crypto` / `cryptocurrency` 分流则从 NetWeave 全量版中移除。
+
+### 5. 自动同步上游并保护本地优化
 
 仓库包含 `Sync upstream` GitHub Action，每天自动拉取：
 
@@ -109,7 +126,11 @@ AIsouler/MyClash main
   README → 保留 NetWeave
   Script / Config → 采用上游最新结构
         ↓
-重新重放并校验 NetWeave patch
+重放 NetWeave 最小语义 patch
+        ↓
+再次运行 patch，验证幂等性
+        ↓
+JS 语法 / whitespace 校验
         ↓
 运行集成测试
         ↓
@@ -125,12 +146,21 @@ AIsouler/MyClash main
 - 国内 QUIC 的 `geolocation-cn` 放行
 - `default-nameserver` 使用国内 DoH
 - `rule-set:cn` / `rule-set:geolocation-cn` 使用国内 DoH
+- `Gemini` / `OpenAI` / `Anthropic` / `GitHub` 独立分流组与规则顺序
+- 具体服务规则优先于 `geolocation-cn` 兜底
 - 移除上游 `Crypto` / `cryptocurrency` 分流组与规则集
 - 四份核心配置 / 脚本的 NetWeave 项目头部与链接
 
-保护逻辑已拆分到 `.github/scripts/preserve_downstream.py`，采用幂等处理；已经处于优化状态时再次运行不会因为“找不到旧写法”而失败。
+保护逻辑按职责拆分到：
 
-因此上游后续对核心脚本和配置的功能、规则与结构调整仍可继续合入；当结构发生已知冲突时，会先采用上游版本，再重放本 Fork 的差异，而不是长期锁死旧文件。
+- `.github/scripts/preserve_downstream.py`：FCM、DNS、QUIC、规则顺序、Crypto 移除、头部等网络语义差异
+- `.github/scripts/preserve_service_groups.py`：Gemini / OpenAI / Anthropic / GitHub 独立策略组
+
+同步过程中会连续运行两次 patch 并比较 diff，确保这些脚本具备幂等性；脚本版还会经过 `node --check`，避免 downstream patch 生成无效 JavaScript。
+
+格式化 workflow 只做检查，不再自动向 `main` push，避免与上游同步 workflow 同时写分支产生 ref 竞争。
+
+因此上游后续对核心脚本和配置的功能、规则与结构调整仍可继续合入；当结构发生已知冲突时，会先采用上游版本，再重放本 Fork 的小范围语义差异，而不是长期锁死旧文件。
 
 ---
 
@@ -247,7 +277,7 @@ FCM / Android 推送相关域名
 
 包括但不限于：
 
-`默认代理`、`手动选择`、`自动选择`、`负载均衡`、`FCM`、`YouTube`、`Google`、`AI`、`Microsoft`、`Apple`、`Telegram`、`Steam`、`TikTok`、`Twitter`、`Instagram`、`Netflix`、`Emby`、`PikPak`、`Spotify`、`EHentai`、`AdBlock`、`直连`、`漏网之鱼`。
+`默认代理`、`手动选择`、`自动选择`、`负载均衡`、`FCM`、`YouTube`、`Gemini`、`OpenAI`、`Anthropic`、`GitHub`、`Google`、`AI`、`Microsoft`、`Apple`、`Telegram`、`Steam`、`TikTok`、`Twitter`、`Instagram`、`Netflix`、`Emby`、`PikPak`、`Spotify`、`EHentai`、`AdBlock`、`直连`、`漏网之鱼`。
 
 地区节点组包括：香港、日本、美国、新加坡、台湾省，以及低倍率、高倍率和其他节点组。
 
