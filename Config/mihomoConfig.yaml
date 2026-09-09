@@ -1,10 +1,8 @@
 #  ---------说明---------
-#  NetWeave - mihomo配置（全量版）
-#  维护：anamaxlec
-#  原作者：AIsouler
-#  项目仓库：https://github.com/anamaxlec/NetWeave
-#  配置链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfig.yaml
-#  上游项目：https://github.com/AIsouler/MyClash
+#  mihomo配置（全量版）
+#  作者：AIsouler
+#  原仓库：https://github.com/AIsouler/MyClash
+#  配置链接：https://raw.githubusercontent.com/AIsouler/MyClash/main/Config/mihomoConfig.yaml
 #  友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
 #  ---------------------
 
@@ -85,34 +83,12 @@ dns:
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/15
   fake-ip-range6: 2001:2::1/48
-  # FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
-  fake-ip-filter: [
-      'rule-set:private',
-      'rule-set:fakeip_filter',
-      'rule-set:geolocation-cn',
-      'rule-set:googlefcm',
-      'mtalk.google.com',
-      'mtalk4.google.com',
-      'mtalk-dev.google.com',
-      'mtalk-staging.google.com',
-      'alt1-mtalk.google.com',
-      'alt2-mtalk.google.com',
-      'alt3-mtalk.google.com',
-      'alt4-mtalk.google.com',
-      'alt5-mtalk.google.com',
-      'alt6-mtalk.google.com',
-      'alt7-mtalk.google.com',
-      'alt8-mtalk.google.com',
-      'android.apis.google.com',
-      'device-provisioning.googleapis.com',
-      'firebaseinstallations.googleapis.com',
-    ]
+  fake-ip-filter: ['rule-set:private', 'rule-set:fakeip_filter', 'rule-set:geolocation-cn', 'rule-set:googlefcm']
   proxy-server-nameserver: *chinaDohDNS
   default-nameserver: *chinaDohDNS
   nameserver: *foreignDNS
   nameserver-policy:
-    'rule-set:cn': *chinaDohDNS
-    'rule-set:geolocation-cn': *chinaDohDNS
+    'rule-set:cn': *chinaDNS
   direct-nameserver: ['system', '223.5.5.5#DIRECT', '119.29.29.29#DIRECT']
 
 hosts:
@@ -213,21 +189,6 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/youtube.mrs'
     path: './ruleset/youtube.mrs'
     path-in-bundle: 'geo/geosite/youtube.mrs'
-  google_gemini:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google-gemini.mrs'
-    path: './ruleset/google_gemini.mrs'
-    path-in-bundle: 'geo/geosite/google-gemini.mrs'
-  openai:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/openai.mrs'
-    path: './ruleset/openai.mrs'
-    path-in-bundle: 'geo/geosite/openai.mrs'
-  anthropic:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/anthropic.mrs'
-    path: './ruleset/anthropic.mrs'
-    path-in-bundle: 'geo/geosite/anthropic.mrs'
   google:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google.mrs'
@@ -338,6 +299,11 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geoip/spotify.mrs'
     path: './ruleset/spotify_ip.mrs'
     path-in-bundle: 'geo/geoip/spotify.mrs'
+  cryptocurrency:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/category-cryptocurrency.mrs'
+    path: './ruleset/cryptocurrency.mrs'
+    path-in-bundle: 'geo/geosite/category-cryptocurrency.mrs'
   ehentai:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/ehentai.mrs'
@@ -527,25 +493,6 @@ proxy-groups:
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/MiToverG422/Qure@master/IconSet/Color/YouTube.png'
 
-  - name: 'Gemini'
-    default-selected: '美国'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png'
-
-  - name: 'OpenAI'
-    default-selected: '美国'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png'
-
-  - name: 'Anthropic'
-    default-selected: '美国'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png'
-
-  - name: 'GitHub'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png'
-
   - name: 'Google'
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png'
@@ -599,6 +546,11 @@ proxy-groups:
   - name: 'Spotify'
     <<: [*group_common_select, *proxies_direct]
     icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Spotify.png'
+
+  - name: 'Crypto'
+    default-selected: '日本'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/lige47/QuanX-icon-rule@main/icon/04ProxySoft/Bitcoin.png'
 
   - name: 'EHentai'
     default-selected: '美国'
@@ -701,7 +653,7 @@ rules:
   - DOMAIN,international-gfe.download.nvidia.com,直连
 
   # 禁用国外 QUIC 流量
-  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT
+  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT
 
   # 广告拦截
   - RULE-SET,adblockmihomolite,AdBlock
@@ -709,13 +661,10 @@ rules:
   # 代理规则
   - RULE-SET,googlefcm,FCM
   - RULE-SET,youtube,YouTube
-  - RULE-SET,google_gemini,Gemini
-  - RULE-SET,openai,OpenAI
-  - RULE-SET,anthropic,Anthropic
-  - RULE-SET,github,GitHub
   - RULE-SET,google,Google
   - RULE-SET,google_ip,Google,no-resolve
   - RULE-SET,ai,AI
+  - RULE-SET,github,默认代理
   - RULE-SET,microsoft,Microsoft
   - RULE-SET,apple,Apple
   - RULE-SET,telegram,Telegram
@@ -744,6 +693,7 @@ rules:
   - RULE-SET,pikpak,PikPak
   - RULE-SET,spotify,Spotify
   - RULE-SET,spotify_ip,Spotify,no-resolve
+  - RULE-SET,cryptocurrency,Crypto
   - RULE-SET,ehentai,EHentai
 
   # 兜底规则
