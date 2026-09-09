@@ -79,6 +79,11 @@ JS_HEADERS = {
 """,
 }
 
+CONDITIONAL_GOOGLEFCM = re.compile(
+    r"(?m)^(?P<indent>[ \t]*)\.\.\.\(\s*ruleOptionsEnable\[['\"]FCM['\"]\]\s*"
+    r"\?\s*\[\s*['\"]rule-set:googlefcm['\"]\s*\]\s*:\s*\[\s*\]\s*\),\s*$"
+)
+
 
 def ensure_after(entries, anchor, value):
     if value in entries:
@@ -107,21 +112,22 @@ def replace_js_header(text, path):
 
 
 def ensure_static_googlefcm_provider(text, path):
-    if re.search(r'(?m)^  googlefcm:\s*$', text):
+    if '\n  googlefcm:\n' in text:
         return text
 
-    marker = re.search(r"(?m)^  geolocation-!cn:\s*$", text)
-    if not marker:
+    marker = '\n  geolocation-!cn:\n'
+    idx = text.find(marker)
+    if idx == -1:
         raise RuntimeError(f'{path}: rule-providers insertion point not found')
 
     block = (
-        "  googlefcm:\n"
+        "\n  googlefcm:\n"
         "    <<: *rule_providers_domain\n"
         f"    url: '{GOOGLEFCM_URL}'\n"
         "    path: './ruleset/googlefcm.mrs'\n"
         "    path-in-bundle: 'geo/geosite/googlefcm.mrs'\n"
     )
-    return text[:marker.start()] + block + text[marker.start():]
+    return text[:idx] + block + text[idx:]
 
 
 def ensure_js_googlefcm_provider(text, path):
@@ -131,16 +137,17 @@ def ensure_js_googlefcm_provider(text, path):
         raise RuntimeError(f'{path}: baseRuleProviders block not found')
 
     base_block = text[start:end]
-    if re.search(r'(?m)^  googlefcm:\s*\{', base_block):
+    if '\n  googlefcm: {\n' in base_block:
         return text
 
-    marker = re.search(r"(?m)^  'geolocation-!cn':\s*\{", base_block)
-    if not marker:
+    marker = "\n  'geolocation-!cn': {\n"
+    relative = base_block.find(marker)
+    if relative == -1:
         raise RuntimeError(f'{path}: baseRuleProviders insertion point not found')
 
-    absolute = start + marker.start()
+    absolute = start + relative
     block = (
-        "  googlefcm: {\n"
+        "\n  googlefcm: {\n"
         "    ...ruleProviderCommonDomain,\n"
         f"    url: '{GOOGLEFCM_URL}',\n"
         "    path: './ruleset/googlefcm.mrs',\n"
@@ -150,34 +157,153 @@ def ensure_js_googlefcm_provider(text, path):
     return text[:absolute] + block + text[absolute:]
 
 
+def remove_between(text, start_marker, end_marker):
+    start = text.find(start_marker)
+    if start == -1:
+        return text
+    end = text.find(end_marker, start)
+    if end == -1:
+        raise RuntimeError(f'cannot find end marker after {start_marker!r}')
+    return text[:start] + text[end:]
+
+
 def remove_crypto_static(text):
-    # Crypto 仅存在于全量静态配置；在精简版上这些替换是 no-op。
-    text = re.sub(
-        r"(?ms)^  cryptocurrency:\n.*?(?=^  ehentai:)",
-        '',
-        text,
-        count=1,
-    )
-    text = re.sub(
-        r"(?ms)^  - name: 'Crypto'\n.*?(?=^  - name: 'EHentai')",
-        '',
-        text,
-        count=1,
-    )
-    text = re.sub(r"(?m)^\s*- RULE-SET,cryptocurrency,Crypto\s*\n", '', text, count=1)
+    text = remove_between(text, '  cryptocurrency:\n', '  ehentai:\n')
+    text = remove_between(text, "  - name: 'Crypto'\n", "  - name: 'EHentai'\n")
+    text = text.replace('  - RULE-SET,cryptocurrency,Crypto\n', '')
     return text
 
 
 def remove_crypto_js(text):
-    # 移除 Bettbox 开关与完整 serviceConfigs 定义；精简脚本没有 Crypto 时为 no-op。
     text = re.sub(r"(?m)^  Crypto:\s*true,\s*//.*\n", '', text, count=1)
-    text = re.sub(
-        r"(?ms)^  \{\n    name: 'Crypto',\n.*?^  \},\n(?=  \{\n    name: 'EHentai',)",
-        '',
-        text,
-        count=1,
-    )
+    text = remove_between(text, "  {\n    name: 'Crypto',\n", "  {\n    name: 'EHentai',\n")
     return text
+
+
+def patch_static_fake_ip_filter(text, path):
+    # 静态 YAML 没有可复用的 JS 常量，保留显式 hostname；只重建这一小段 DNS 字段。
+    text = re.sub(r'(?m)^  # FCM .*\n', '', text, count=1)
+    start = text.find('  fake-ip-filter:')
+    end = text.find('  proxy-server-nameserver:', start)
+    if start == -1 or end == -1:
+        raise RuntimeError(f'{path}: fake-ip-filter section not found')
+
+    entries = re.findall(r"'([^']+)'", text[start:end])
+    ensure_after(entries, 'rule-set:geolocation-cn', GOOGLEFCM_RULESET)
+    for domain in FCM_DOMAINS:
+        if domain not in entries:
+            entries.append(domain)
+
+    rebuilt = (
+        '  # FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底\n'
+        '  fake-ip-filter: [\n'
+        + ''.join(f"      '{entry}',\n" for entry in entries)
+        + '    ]\n'
+    )
+    return text[:start] + rebuilt + text[end:]
+
+
+def ensure_fcm_fallback_constant(text, path):
+    block = (
+        '// FCM real-IP 显式兜底；googlefcm rule-set 负责动态覆盖。\n'
+        'const fcmRealIpFallback = [\n'
+        + ''.join(f"  '{domain}',\n" for domain in FCM_DOMAINS)
+        + '];\n\n'
+    )
+
+    start = text.find('const fcmRealIpFallback = [')
+    if start != -1:
+        end = text.find('];', start)
+        if end == -1:
+            raise RuntimeError(f'{path}: fcmRealIpFallback closing marker not found')
+        line_start = text.rfind('\n', 0, start) + 1
+        comment_start = text.rfind('// FCM real-IP', 0, start)
+        if comment_start >= line_start - 120:
+            line_start = comment_start
+        return text[:line_start] + block + text[end + 2:].lstrip('\n')
+
+    marker = '// 直连节点'
+    idx = text.find(marker)
+    if idx == -1:
+        raise RuntimeError(f'{path}: FCM fallback insertion marker not found')
+    return text[:idx] + block + text[idx:]
+
+
+def patch_js_fake_ip_filter(text, path):
+    # 跟随上游的声明式数组结构，只做最小语义差异：googlefcm 永久在线 + fallback spread。
+    def normalize_conditional(match):
+        return f"{match.group('indent')}'rule-set:googlefcm',"
+
+    text = CONDITIONAL_GOOGLEFCM.sub(normalize_conditional, text)
+    text = re.sub(r'(?m)^\s*// FCM .*\n', '', text, count=1)
+
+    marker = "'fake-ip-filter': ["
+    pos = text.find(marker)
+    if pos == -1:
+        raise RuntimeError(f'{path}: fake-ip-filter not found')
+    line_start = text.rfind('\n', 0, pos) + 1
+
+    spread_pos = text.find('...proxyFakeIpFilter,', pos)
+    if spread_pos == -1:
+        raise RuntimeError(f'{path}: proxyFakeIpFilter spread not found')
+    spread_line_start = text.rfind('\n', 0, spread_pos) + 1
+
+    prefix = text[line_start:spread_line_start]
+    if 'ruleOptionsEnable' in prefix and 'googlefcm' in prefix:
+        raise RuntimeError(f'{path}: unsupported conditional googlefcm syntax; refusing to rewrite nested JS')
+
+    filtered_lines = []
+    for line in prefix.splitlines(keepends=True):
+        if "'rule-set:googlefcm'" in line:
+            continue
+        if '...fcmRealIpFallback' in line:
+            continue
+        if any(f"'{domain}'" in line for domain in FCM_DOMAINS):
+            continue
+        filtered_lines.append(line)
+
+    geo_index = next(
+        (i for i, line in enumerate(filtered_lines) if "'rule-set:geolocation-cn'" in line),
+        None,
+    )
+    if geo_index is None:
+        raise RuntimeError(f'{path}: geolocation-cn entry not found in fake-ip-filter')
+
+    item_indent = re.match(r'\s*', filtered_lines[geo_index]).group(0)
+    filtered_lines.insert(geo_index + 1, f"{item_indent}'rule-set:googlefcm',\n")
+
+    spread_indent = re.match(r'\s*', text[spread_line_start:spread_pos]).group(0)
+    rebuilt = ''.join(filtered_lines) + f'{spread_indent}...fcmRealIpFallback,\n'
+    comment = f'{item_indent[:-2]}// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底\n'
+    return text[:line_start] + comment + rebuilt + text[spread_line_start:]
+
+
+def ensure_static_service_before_cn_fallback(text, path):
+    # NetWeave 保持具体服务分流优先；geolocation-cn 只作为兜底，避免 Google 等全局域名误分类后被提前直连。
+    rule = '  - RULE-SET,geolocation-cn,直连\n'
+    text = text.replace(rule, '')
+    anchor = '  - RULE-SET,geolocation-!cn,默认代理\n'
+    if anchor not in text:
+        raise RuntimeError(f'{path}: geolocation-!cn fallback not found')
+    return text.replace(anchor, anchor + rule, 1)
+
+
+def ensure_js_service_before_cn_fallback(text, path):
+    prefix_start = text.find('const prefixRules = [')
+    prefix_end = text.find('];', prefix_start)
+    if prefix_start == -1 or prefix_end == -1:
+        raise RuntimeError(f'{path}: prefixRules block not found')
+
+    prefix = text[prefix_start:prefix_end]
+    prefix = prefix.replace("  'RULE-SET,geolocation-cn,直连',\n", '')
+    text = text[:prefix_start] + prefix + text[prefix_end:]
+
+    rule = "    'RULE-SET,geolocation-cn,直连',\n"
+    text = text.replace(rule, '')
+    anchor = "    'RULE-SET,geolocation-!cn,默认代理',\n"
+    if anchor not in text:
+        raise RuntimeError(f'{path}: geolocation-!cn fallback not found')
+    return text.replace(anchor, anchor + rule, 1)
 
 
 def patch_static(path):
@@ -185,37 +311,19 @@ def patch_static(path):
     text = replace_static_header(text, path)
     text = ensure_static_googlefcm_provider(text, path)
     text = remove_crypto_static(text)
+    text = patch_static_fake_ip_filter(text, path)
+    text = ensure_static_service_before_cn_fallback(text, path)
 
-    match = re.search(r"(?m)^  fake-ip-filter:\s*(\[[\s\S]*?\])", text)
-    if not match:
-        raise RuntimeError(f'{path}: fake-ip-filter not found')
-
-    entries = re.findall(r"'([^']+)'", match.group(1))
-    ensure_after(entries, 'rule-set:geolocation-cn', GOOGLEFCM_RULESET)
-    for domain in FCM_DOMAINS:
-        if domain not in entries:
-            entries.append(domain)
-
-    rebuilt = '[\n' + ''.join(f"      '{entry}',\n" for entry in entries) + '    ]'
-    text = text[:match.start(1)] + rebuilt + text[match.end(1):]
-
-    comment = '  # FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底'
-    if re.search(r'(?m)^  # FCM .*$', text):
-        text = re.sub(r'(?m)^  # FCM .*$', comment, text, count=1)
-    else:
-        text = text.replace('  fake-ip-filter:', comment + '\n  fake-ip-filter:', 1)
-
-    # bootstrap/default、cn、geolocation-cn 全部使用国内 DoH。
     default_ns = re.compile(r"(?m)^(\s*)default-nameserver:\s*\*(?:chinaDNS|chinaDohDNS)\s*$")
     if not default_ns.search(text):
         raise RuntimeError(f'{path}: default-nameserver not found')
     text = default_ns.sub(r"\1default-nameserver: *chinaDohDNS", text, count=1)
 
     cn_policy = re.compile(r"(?m)^(\s*)'rule-set:cn':\s*\*(?:chinaDNS|chinaDohDNS)\s*$")
-    m = cn_policy.search(text)
-    if not m:
+    match = cn_policy.search(text)
+    if not match:
         raise RuntimeError(f'{path}: nameserver-policy rule-set:cn not found')
-    indent = m.group(1)
+    indent = match.group(1)
     text = cn_policy.sub(f"{indent}'rule-set:cn': *chinaDohDNS", text, count=1)
 
     geo_policy = re.compile(r"(?m)^\s*'rule-set:geolocation-cn':\s*\*(?:chinaDNS|chinaDohDNS)\s*$")
@@ -241,40 +349,9 @@ def patch_js(path):
     text = replace_js_header(text, path)
     text = ensure_js_googlefcm_provider(text, path)
     text = remove_crypto_js(text)
-
-    match = re.search(r"(?m)^(\s*)'fake-ip-filter':\s*\[([\s\S]*?)\]", text)
-    if not match:
-        raise RuntimeError(f'{path}: fake-ip-filter not found')
-
-    indent = match.group(1)
-    inner = match.group(2)
-    entries = re.findall(r"'([^']+)'", inner)
-    spreads = re.findall(r"\.\.\.[A-Za-z_$][\w$]*", inner)
-    ensure_after(entries, 'rule-set:geolocation-cn', GOOGLEFCM_RULESET)
-    for domain in FCM_DOMAINS:
-        if domain not in entries:
-            entries.append(domain)
-
-    item_indent = indent + '  '
-    rebuilt = (
-        f"{indent}'fake-ip-filter': [\n"
-        + ''.join(f"{item_indent}'{entry}',\n" for entry in entries)
-        + ''.join(f"{item_indent}{spread},\n" for spread in spreads)
-        + f'{indent}]'
-    )
-    text = text[:match.start()] + rebuilt + text[match.end():]
-
-    comment = indent + '// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底'
-    block_pos = text.find("'fake-ip-filter':")
-    block_start = text.rfind('\n', 0, block_pos) + 1
-    before = text[:block_start]
-    old_comment = re.compile(r'(?m)^\s*// FCM .*$')
-    if old_comment.search(before[-300:]):
-        start = max(0, len(before) - 300)
-        tail = old_comment.sub(comment, before[start:], count=1)
-        text = before[:start] + tail + text[block_start:]
-    else:
-        text = text[:block_start] + comment + '\n' + text[block_start:]
+    text = ensure_fcm_fallback_constant(text, path)
+    text = patch_js_fake_ip_filter(text, path)
+    text = ensure_js_service_before_cn_fallback(text, path)
 
     default_ns = re.compile(r"(?m)^(\s*)'default-nameserver':\s*(?:chinaDNS|chinaDohDNS),\s*$")
     if not default_ns.search(text):
@@ -282,10 +359,10 @@ def patch_js(path):
     text = default_ns.sub(r"\1'default-nameserver': chinaDohDNS,", text, count=1)
 
     cn_policy = re.compile(r"(?m)^(\s*)'rule-set:cn':\s*(?:chinaDNS|chinaDohDNS),\s*$")
-    m = cn_policy.search(text)
-    if not m:
+    match = cn_policy.search(text)
+    if not match:
         raise RuntimeError(f'{path}: nameserver-policy rule-set:cn not found')
-    policy_indent = m.group(1)
+    policy_indent = match.group(1)
     text = cn_policy.sub(f"{policy_indent}'rule-set:cn': chinaDohDNS,", text, count=1)
 
     geo_policy = re.compile(r"(?m)^\s*'rule-set:geolocation-cn':\s*(?:chinaDNS|chinaDohDNS),\s*$")
@@ -323,33 +400,44 @@ for path in STATIC_FILES + JS_FILES:
         raise RuntimeError(f'{path}: missing {GOOGLEFCM_RULESET} in fake-ip-filter')
     if GOOGLEFCM_URL not in text:
         raise RuntimeError(f'{path}: missing always-available googlefcm provider')
-    for domain in FCM_DOMAINS:
-        if domain not in text:
-            raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
     if QUIC_RULE not in text:
         raise RuntimeError(f'{path}: missing protected China QUIC rule')
 
     if path.suffix == '.yaml':
+        for domain in FCM_DOMAINS:
+            if domain not in text:
+                raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
         required = [
             'default-nameserver: *chinaDohDNS',
             "'rule-set:cn': *chinaDohDNS",
             "'rule-set:geolocation-cn': *chinaDohDNS",
         ]
+        cn_rule = '  - RULE-SET,geolocation-cn,直连\n'
+        foreign_rule = '  - RULE-SET,geolocation-!cn,默认代理\n'
     else:
+        if 'const fcmRealIpFallback = [' not in text or '...fcmRealIpFallback,' not in text:
+            raise RuntimeError(f'{path}: FCM fallback is not expressed as an upstream-style spread')
+        for domain in FCM_DOMAINS:
+            if domain not in text:
+                raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
         required = [
             "'default-nameserver': chinaDohDNS,",
             "'rule-set:cn': chinaDohDNS,",
             "'rule-set:geolocation-cn': chinaDohDNS,",
         ]
+        cn_rule = "    'RULE-SET,geolocation-cn,直连',\n"
+        foreign_rule = "    'RULE-SET,geolocation-!cn,默认代理',\n"
+
     for item in required:
         if item not in text:
             raise RuntimeError(f'{path}: missing protected DNS setting {item}')
+    if text.find(cn_rule) < text.find(foreign_rule):
+        raise RuntimeError(f'{path}: geolocation-cn must remain a fallback after specific service routing')
 
-# Crypto 是 NetWeave 明确删除的下游策略；每次同步后都必须保持不存在。
 full_static = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
 full_js = Path('Script/mihomoScript.js').read_text(encoding='utf-8')
 for forbidden in ["name: 'Crypto'", 'RULE-SET,cryptocurrency,Crypto', 'category-cryptocurrency.mrs']:
     if forbidden in full_static or forbidden in full_js:
         raise RuntimeError(f'Crypto downstream removal failed: still contains {forbidden}')
 
-print('NetWeave downstream patches verified for all four files')
+print('NetWeave downstream semantic patches verified for all four files')
