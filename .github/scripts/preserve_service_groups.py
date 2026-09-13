@@ -104,13 +104,19 @@ def detach_github_from_microsoft_js(text):
         f"        'path-in-bundle': 'geo/geosite/{github['url'].rsplit('/', 1)[-1]}',\n"
         "      },\n"
     )
-
     block = block.replace(github_provider, '', 1)
-    block = block.replace(
-        "    rules: ['RULE-SET,github,默认代理', 'RULE-SET,microsoft,Microsoft'],\n",
-        "    rules: ['RULE-SET,microsoft,Microsoft'],\n",
-        1,
-    )
+
+    # GitHub 曾被上游放在 Microsoft 组中。这里只删除这一条路由项，
+    # 不依赖 Microsoft rules 数组的完整形态；这样新增 microsoft_ip 等规则时仍可继承。
+    github_rule = "'RULE-SET,github,默认代理'"
+    if github_rule in block:
+        block = block.replace(github_rule + ', ', '', 1)
+        block = block.replace(github_rule + ',\n', '', 1)
+        block = block.replace(github_rule, '', 1)
+
+    if github_rule in block:
+        raise RuntimeError('mihomoScript.js: failed to detach GitHub rule from Microsoft')
+
     return text[:start] + block + text[end:]
 
 
@@ -188,6 +194,7 @@ def patch_static():
     for service in SERVICES:
         text = ensure_static_group(text, service)
 
+    # 静态配置同样只删除 GitHub → 默认代理这一条，不触碰 Microsoft 的其他新规则。
     text = text.replace('  - RULE-SET,github,默认代理\n', '')
     for service in SERVICES:
         text = ensure_rule_before_google(text, service)
@@ -226,4 +233,4 @@ yaml_rule_order.extend([yaml.index('RULE-SET,google,Google'), yaml.index('RULE-S
 if yaml_rule_order != sorted(yaml_rule_order):
     raise RuntimeError('mihomoConfig.yaml: dedicated rule order is incorrect')
 
-print('Dedicated Gemini/OpenAI/Anthropic/GitHub groups verified with minimal patches')
+print('Dedicated Gemini/OpenAI/Anthropic/GitHub groups verified with semantic patches')
