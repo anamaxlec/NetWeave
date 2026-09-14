@@ -49,6 +49,18 @@ def patch_static_dns(text, path):
         raise RuntimeError(f'{path}: supported proxy-server-nameserver layout not found')
     text = proxy_ns.sub(r"\1proxy-server-nameserver: *chinaDohDNS", text, count=1)
 
+    # preserve_downstream.py 的静态 fake-ip patch 以 proxy-server-nameserver
+    # 作为 fake-ip-filter 的结束锚点；将上游的新字段顺序规范为安全顺序。
+    new_order = (
+        '  default-nameserver: *chinaDohDNS\n'
+        '  proxy-server-nameserver: *chinaDohDNS\n'
+    )
+    safe_order = (
+        '  proxy-server-nameserver: *chinaDohDNS\n'
+        '  default-nameserver: *chinaDohDNS\n'
+    )
+    text = text.replace(new_order, safe_order, 1)
+
     return text
 
 
