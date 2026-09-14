@@ -114,6 +114,34 @@ def patch_js_dns(text, path):
     return text
 
 
+def ensure_js_proxy_fake_ip_spread(text, path):
+    marker = "'fake-ip-filter': ["
+    pos = text.find(marker)
+    if pos == -1:
+        raise RuntimeError(f'{path}: fake-ip-filter not found before downstream patch')
+
+    if text.find('...proxyFakeIpFilter,', pos) != -1:
+        return text
+
+    if 'const proxyFakeIpFilter =' not in text:
+        raise RuntimeError(f'{path}: proxyFakeIpFilter variable and spread are both missing')
+
+    # 上游如果把 fake-ip-filter 简化为不带订阅保留项的数组，则只补回已有变量的 spread，
+    # 不改变其他 DNS 生成逻辑。支持单行与多行数组。
+    line_end = text.find('\n', pos)
+    if line_end == -1:
+        line_end = len(text)
+    line = text[pos:line_end]
+    if ']' in line:
+        close = text.rfind(']', pos, line_end)
+        return text[:close] + ', ...proxyFakeIpFilter' + text[close:]
+
+    close = text.find('\n    ],', pos)
+    if close == -1:
+        raise RuntimeError(f'{path}: fake-ip-filter closing bracket not found')
+    return text[:close] + '\n      ...proxyFakeIpFilter,' + text[close:]
+
+
 def patch_js_tun(text, path):
     marker = "newConfig['tun'] = {"
     start = text.find(marker)
@@ -138,6 +166,7 @@ def patch_static(path):
 def patch_js(path):
     text = path.read_text(encoding='utf-8')
     text = patch_js_dns(text, path)
+    text = ensure_js_proxy_fake_ip_spread(text, path)
     text = patch_js_tun(text, path)
     path.write_text(text, encoding='utf-8')
 
@@ -162,11 +191,16 @@ for file in JS_FILES:
         raise RuntimeError(f'{file}: encrypted default DNS policy not preserved')
     if "'proxy-server-nameserver': chinaDohDNS," not in text:
         raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
+    fake_ip_pos = text.find("'fake-ip-filter': [")
+    spread_pos = text.find('...proxyFakeIpFilter,', fake_ip_pos)
+    if fake_ip_pos == -1 or spread_pos == -1:
+        raise RuntimeError(f'{file}: proxyFakeIpFilter spread is unavailable before downstream patch')
     tun_start = text.find("newConfig['tun'] = {")
     tun_end = text.find('\n  };', tun_start)
     if tun_start == -1 or tun_end == -1:
         raise RuntimeError(f'{file}: generated tun block not found during validation')
     if "stack: 'mips'" in text[tun_start:tun_end]:
         raise RuntimeError(f'{file}: invalid top-level TUN stack mips remains')
+    print(f'{file}: fake-ip-filter compatibility ready at offset {fake_ip_pos}, spread at {spread_pos}')
 
-print('Upstream DNS layout and top-level TUN compatibility verified')
+print('Upstream DNS layout, fake-ip layout and top-level TUN compatibility verified')
