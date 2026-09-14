@@ -1252,8 +1252,19 @@ const commonDnsRegex = new RegExp(
 // 国内外 DNS 定义
 const chinaDNS = ['system', '223.5.5.5#DIRECT', '119.29.29.29#DIRECT'];
 const foreignDNS = ['https://cloudflare-dns.com/dns-query#默认代理', 'https://dns.google/dns-query#默认代理'];
-const defaultDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://1.12.12.12#DIRECT'];
-const proxyServerDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://doh.pub/dns-query#DIRECT'];
+const defaultDNS = [
+  'https://223.5.5.5/dns-query#DIRECT',
+  'https://1.12.12.12/dns-query#DIRECT',
+];
+const proxyServerDNS = [
+  'https://223.5.5.5/dns-query#DIRECT',
+  'https://1.12.12.12/dns-query#DIRECT',
+];
+
+const chinaDohDNS = [
+  'https://223.5.5.5/dns-query#DIRECT',
+  'https://1.12.12.12/dns-query#DIRECT',
+];
 
 /**
  * hosts 匹配优先级：精确 > +. > . > *（同级按出现顺序）
@@ -1523,8 +1534,8 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
       ...fcmRealIpFallback,
       ...proxyFakeIpFilter,
     ],
-    'default-nameserver': defaultDNS,
-    'proxy-server-nameserver': proxyServerDNS,
+    'default-nameserver': chinaDohDNS,
+    'proxy-server-nameserver': chinaDohDNS,
     ...(Object.keys(proxyServerPolicy).length > 0 && {
       'proxy-server-nameserver-policy': proxyServerPolicy,
     }),
@@ -1609,7 +1620,7 @@ function main(config) {
 
   newConfig['tun'] = {
     enable: true,
-    stack: 'mips',
+    stack: 'system',
     'auto-route': true,
     'strict-route': true,
     'auto-redirect': true,
