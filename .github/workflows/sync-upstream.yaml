@@ -9,6 +9,7 @@ on:
     branches: ['main']
     paths:
       - '.github/workflows/sync-upstream.yaml'
+      - '.github/scripts/preserve_upstream_compat.py'
       - '.github/scripts/preserve_downstream.py'
       - '.github/scripts/preserve_service_groups.py'
 
@@ -82,6 +83,7 @@ jobs:
 
       - name: Preserve downstream customizations
         run: |
+          python3 .github/scripts/preserve_upstream_compat.py
           python3 .github/scripts/preserve_downstream.py
           python3 .github/scripts/preserve_service_groups.py
 
@@ -97,6 +99,7 @@ jobs:
           )
 
           git diff -- "${files[@]}" > /tmp/netweave-before.diff
+          python3 .github/scripts/preserve_upstream_compat.py
           python3 .github/scripts/preserve_downstream.py
           python3 .github/scripts/preserve_service_groups.py
           git diff -- "${files[@]}" > /tmp/netweave-after.diff
