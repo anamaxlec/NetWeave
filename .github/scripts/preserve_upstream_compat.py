@@ -114,27 +114,45 @@ def patch_js_dns(text, path):
     return text
 
 
-def ensure_js_proxy_fake_ip_spread(text, path):
+def normalize_js_fake_ip_filter(text, path):
     marker = "'fake-ip-filter': ["
     pos = text.find(marker)
     if pos == -1:
         raise RuntimeError(f'{path}: fake-ip-filter not found before downstream patch')
 
-    if text.find('...proxyFakeIpFilter,', pos) != -1:
+    line_start = text.rfind('\n', 0, pos) + 1
+    line_end = text.find('\n', pos)
+    if line_end == -1:
+        line_end = len(text)
+
+    # Lite 上游会把整个数组压成单行；主 patch 按条目行处理，所以先展开成和全量版一致的格式。
+    line = text[line_start:line_end]
+    open_bracket = line.find('[')
+    close_bracket = line.rfind(']')
+    if open_bracket != -1 and close_bracket > open_bracket:
+        indent = line[: len(line) - len(line.lstrip())]
+        prop = line[:open_bracket].rstrip()
+        inner = line[open_bracket + 1 : close_bracket]
+        entries = [item.strip() for item in inner.split(',') if item.strip()]
+        if not any(item == '...proxyFakeIpFilter' for item in entries):
+            if 'const proxyFakeIpFilter =' not in text:
+                raise RuntimeError(f'{path}: proxyFakeIpFilter variable and spread are both missing')
+            entries.append('...proxyFakeIpFilter')
+
+        rebuilt = (
+            f'{prop}[\n'
+            + ''.join(f'{indent}  {entry},\n' for entry in entries)
+            + f'{indent}],'
+        )
+        return text[:line_start] + rebuilt + text[line_end:]
+
+    # 多行布局只需确认 spread 存在；若上游删除但变量仍存在，则补到数组结尾。
+    spread_pos = text.find('...proxyFakeIpFilter,', pos)
+    if spread_pos != -1:
         return text
 
     if 'const proxyFakeIpFilter =' not in text:
         raise RuntimeError(f'{path}: proxyFakeIpFilter variable and spread are both missing')
-
-    # 上游如果把 fake-ip-filter 简化为不带订阅保留项的数组，则只补回已有变量的 spread，
-    # 不改变其他 DNS 生成逻辑。支持单行与多行数组。
-    line_end = text.find('\n', pos)
-    if line_end == -1:
-        line_end = len(text)
-    line = text[pos:line_end]
-    if ']' in line:
-        close = text.rfind(']', pos, line_end)
-        return text[:close] + ', ...proxyFakeIpFilter' + text[close:]
 
     close = text.find('\n    ],', pos)
     if close == -1:
@@ -166,7 +184,7 @@ def patch_static(path):
 def patch_js(path):
     text = path.read_text(encoding='utf-8')
     text = patch_js_dns(text, path)
-    text = ensure_js_proxy_fake_ip_spread(text, path)
+    text = normalize_js_fake_ip_filter(text, path)
     text = patch_js_tun(text, path)
     path.write_text(text, encoding='utf-8')
 
@@ -201,6 +219,5 @@ for file in JS_FILES:
         raise RuntimeError(f'{file}: generated tun block not found during validation')
     if "stack: 'mips'" in text[tun_start:tun_end]:
         raise RuntimeError(f'{file}: invalid top-level TUN stack mips remains')
-    print(f'{file}: fake-ip-filter compatibility ready at offset {fake_ip_pos}, spread at {spread_pos}')
 
 print('Upstream DNS layout, fake-ip layout and top-level TUN compatibility verified')
