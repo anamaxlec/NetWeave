@@ -16,6 +16,26 @@ CHINA_DOH = [
 ]
 
 
+def dns_array_block(name, indent=''):
+    return (
+        f'{indent}{name}:\n'
+        f'{indent}  &{name} [\n'
+        + ''.join(f"{indent}    '{item}',\n" for item in CHINA_DOH)
+        + f'{indent}  ]\n'
+    )
+
+
+def ensure_static_upstream_dns_values(text, path):
+    start = text.find('  defaultDNS:')
+    proxy = text.find('  proxyServerDNS:', start)
+    dns_section = text.find('\ndns:\n', proxy)
+    if start == -1 or proxy == -1 or dns_section == -1:
+        raise RuntimeError(f'{path}: upstream defaultDNS/proxyServerDNS block not found')
+
+    replacement = dns_array_block('defaultDNS', '  ') + dns_array_block('proxyServerDNS', '  ')
+    return text[:start] + replacement + text[dns_section:]
+
+
 def ensure_static_china_doh(text, path):
     if '&chinaDohDNS' in text:
         return text
@@ -37,6 +57,7 @@ def ensure_static_china_doh(text, path):
 
 
 def patch_static_dns(text, path):
+    text = ensure_static_upstream_dns_values(text, path)
     text = ensure_static_china_doh(text, path)
 
     default_ns = re.compile(r"(?m)^(\s*)default-nameserver:\s*\*(?:defaultDNS|chinaDNS|chinaDohDNS)\s*$")
@@ -77,6 +98,29 @@ def patch_static_tun(text, path):
     return text[:start] + block + text[end:]
 
 
+def replace_js_array_constant(text, name, path):
+    marker = f'const {name} = ['
+    start = text.find(marker)
+    if start == -1:
+        raise RuntimeError(f'{path}: {name} constant not found')
+    end = text.find('];', start)
+    if end == -1:
+        raise RuntimeError(f'{path}: {name} constant closing marker not found')
+
+    block = (
+        f'const {name} = [\n'
+        + ''.join(f"  '{item}',\n" for item in CHINA_DOH)
+        + '];'
+    )
+    return text[:start] + block + text[end + 2:]
+
+
+def ensure_js_upstream_dns_values(text, path):
+    text = replace_js_array_constant(text, 'defaultDNS', path)
+    text = replace_js_array_constant(text, 'proxyServerDNS', path)
+    return text
+
+
 def ensure_js_china_doh(text, path):
     if 'const chinaDohDNS = [' in text:
         return text
@@ -95,6 +139,7 @@ def ensure_js_china_doh(text, path):
 
 
 def patch_js_dns(text, path):
+    text = ensure_js_upstream_dns_values(text, path)
     text = ensure_js_china_doh(text, path)
 
     default_ns = re.compile(
@@ -200,6 +245,8 @@ for file in STATIC_FILES:
         raise RuntimeError(f'{file}: encrypted default DNS policy not preserved')
     if 'proxy-server-nameserver: *chinaDohDNS' not in text:
         raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
+    if '&defaultDNS' not in text or '&proxyServerDNS' not in text:
+        raise RuntimeError(f'{file}: upstream DNS compatibility anchors missing')
     if re.search(r'(?m)^\s*stack:\s*mips\s*$', text):
         raise RuntimeError(f'{file}: invalid top-level TUN stack mips remains')
 
@@ -209,6 +256,11 @@ for file in JS_FILES:
         raise RuntimeError(f'{file}: encrypted default DNS policy not preserved')
     if "'proxy-server-nameserver': chinaDohDNS," not in text:
         raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
+    for name in ('defaultDNS', 'proxyServerDNS'):
+        start = text.find(f'const {name} = [')
+        end = text.find('];', start)
+        if start == -1 or end == -1 or not all(item in text[start:end] for item in CHINA_DOH):
+            raise RuntimeError(f'{file}: {name} does not mirror NetWeave encrypted DNS values')
     fake_ip_pos = text.find("'fake-ip-filter': [")
     spread_pos = text.find('...proxyFakeIpFilter,', fake_ip_pos)
     if fake_ip_pos == -1 or spread_pos == -1:
@@ -220,4 +272,4 @@ for file in JS_FILES:
     if "stack: 'mips'" in text[tun_start:tun_end]:
         raise RuntimeError(f'{file}: invalid top-level TUN stack mips remains')
 
-print('Upstream DNS layout, fake-ip layout and top-level TUN compatibility verified')
+print('Upstream DNS values, fake-ip layout and top-level TUN compatibility verified')
