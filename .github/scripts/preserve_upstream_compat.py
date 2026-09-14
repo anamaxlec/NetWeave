@@ -140,7 +140,7 @@ def normalize_js_fake_ip_filter(text, path):
             entries.append('...proxyFakeIpFilter')
 
         rebuilt = (
-            f'{prop}[\n'
+            f'{prop} [\n'
             + ''.join(f'{indent}  {entry},\n' for entry in entries)
             + f'{indent}],'
         )
