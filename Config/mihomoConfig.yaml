@@ -321,11 +321,21 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geoip/twitter.mrs'
     path: './ruleset/twitter_ip.mrs'
     path-in-bundle: 'geo/geoip/twitter.mrs'
-  instagram:
+  meta:
     <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/instagram.mrs'
-    path: './ruleset/instagram.mrs'
-    path-in-bundle: 'geo/geosite/instagram.mrs'
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/meta.mrs'
+    path: './ruleset/meta.mrs'
+    path-in-bundle: 'geo/geosite/meta.mrs'
+  facebook_ip:
+    <<: *rule_providers_ip
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geoip/facebook.mrs'
+    path: './ruleset/facebook_ip.mrs'
+    path-in-bundle: 'geo/geoip/facebook.mrs'
+  line:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/line.mrs'
+    path: './ruleset/line.mrs'
+    path-in-bundle: 'geo/geosite/line.mrs'
   netflix:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/netflix.mrs'
@@ -603,9 +613,13 @@ proxy-groups:
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Twitter.png'
 
-  - name: 'Instagram'
+  - name: 'Meta'
     <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/MiToverG422/Qure@master/IconSet/Color/Instagram.png'
+    icon: 'https://fastly.jsdelivr.net/gh/lige47/QuanX-icon-rule@main/icon/04ProxySoft/meta.png'
+
+  - name: 'Line'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Line.png'
 
   - name: 'Netflix'
     <<: [*group_common_select, *proxies_default]
@@ -750,7 +764,9 @@ rules:
   - RULE-SET,tiktok_ip,TikTok,no-resolve
   - RULE-SET,twitter,Twitter
   - RULE-SET,twitter_ip,Twitter,no-resolve
-  - RULE-SET,instagram,Instagram
+  - RULE-SET,meta,Meta
+  - RULE-SET,facebook_ip,Meta,no-resolve
+  - RULE-SET,line,Line
   - RULE-SET,netflix,Netflix
   - RULE-SET,netflix_ip,Netflix,no-resolve
   - RULE-SET,emby,Emby
