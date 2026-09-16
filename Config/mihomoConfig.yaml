@@ -73,7 +73,7 @@ profile:
 
 # 国内外 DNS 定义
 dns_common:
-  chinaDNS: &chinaDNS ['system', '223.5.5.5#DIRECT', '119.29.29.29#DIRECT']
+  chinaDNS: &chinaDNS ['223.5.5.5#DIRECT', '119.29.29.29#DIRECT']
   foreignDNS: &foreignDNS ['https://cloudflare-dns.com/dns-query#默认代理', 'https://dns.google/dns-query#默认代理']
   defaultDNS:
     &defaultDNS [
@@ -639,7 +639,7 @@ proxy-groups:
 
   - name: 'EHentai'
     default-selected: '美国'
-    <<: [*group_common_select, *proxies_default]
+    <<: [*group_common_select, *proxies_direct]
     icon: 'https://fastly.jsdelivr.net/gh/lige47/QuanX-icon-rule@main/icon/04ProxySoft/exhentai.png'
 
   - name: 'AdBlock'
