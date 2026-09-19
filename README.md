@@ -150,6 +150,7 @@ JS 语法 / whitespace 校验
 - 具体服务规则优先于 `geolocation-cn` 兜底
 - 移除上游 `Crypto` / `cryptocurrency` 分流组与规则集
 - 四份核心配置 / 脚本的 NetWeave 项目头部与链接
+- TUN `stack` 跟随上游当前值，不再覆盖 `mips`
 
 保护逻辑按职责拆分到：
 
@@ -227,6 +228,7 @@ https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfigLit
 - 屏蔽国外 QUIC
 - IPv4 / IPv6 优先
 - 链式代理
+- TUN 栈跟随上游；Bettbox 新版可直接选择 `mips`，NetWeave 不再将其强制回退为 `system`
 
 针对本 Fork 的使用习惯，开启「屏蔽国外 QUIC」时建议同时保持 Bettbox 中的「排除国内」开启，以实现“国外 QUIC 禁用、国内 QUIC 放行”。
 

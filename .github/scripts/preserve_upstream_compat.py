@@ -86,17 +86,8 @@ def patch_static_dns(text, path):
 
 
 def patch_static_tun(text, path):
-    start = text.find('\ntun:\n')
-    if start == -1:
-        raise RuntimeError(f'{path}: tun section not found')
-    end = text.find('\n# ---', start)
-    if end == -1:
-        end = len(text)
-
-    block = text[start:end]
-    block = re.sub(r'(?m)^(\s*stack:)\s*mips\s*$', r'\1 system', block, count=1)
-    return text[:start] + block + text[end:]
-
+    # Bettbox 已支持 mips；TUN stack 直接跟随上游，不再强制回退为 system。
+    return text
 
 def replace_js_array_constant(text, name, path):
     marker = f'const {name} = ['
@@ -206,18 +197,8 @@ def normalize_js_fake_ip_filter(text, path):
 
 
 def patch_js_tun(text, path):
-    marker = "newConfig['tun'] = {"
-    start = text.find(marker)
-    if start == -1:
-        raise RuntimeError(f'{path}: generated tun block not found')
-    end = text.find('\n  };', start)
-    if end == -1:
-        raise RuntimeError(f'{path}: generated tun block end not found')
-
-    block = text[start:end]
-    block = re.sub(r"(?m)^(\s*stack:)\s*'mips',\s*$", r"\1 'system',", block, count=1)
-    return text[:start] + block + text[end:]
-
+    # Bettbox 已支持 mips；TUN stack 直接跟随上游，不再强制回退为 system。
+    return text
 
 def patch_static(path):
     text = path.read_text(encoding='utf-8')
@@ -247,8 +228,6 @@ for file in STATIC_FILES:
         raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
     if '&defaultDNS' not in text or '&proxyServerDNS' not in text:
         raise RuntimeError(f'{file}: upstream DNS compatibility anchors missing')
-    if re.search(r'(?m)^\s*stack:\s*mips\s*$', text):
-        raise RuntimeError(f'{file}: invalid top-level TUN stack mips remains')
 
 for file in JS_FILES:
     text = file.read_text(encoding='utf-8')
@@ -265,11 +244,5 @@ for file in JS_FILES:
     spread_pos = text.find('...proxyFakeIpFilter,', fake_ip_pos)
     if fake_ip_pos == -1 or spread_pos == -1:
         raise RuntimeError(f'{file}: proxyFakeIpFilter spread is unavailable before downstream patch')
-    tun_start = text.find("newConfig['tun'] = {")
-    tun_end = text.find('\n  };', tun_start)
-    if tun_start == -1 or tun_end == -1:
-        raise RuntimeError(f'{file}: generated tun block not found during validation')
-    if "stack: 'mips'" in text[tun_start:tun_end]:
-        raise RuntimeError(f'{file}: invalid top-level TUN stack mips remains')
 
-print('Upstream DNS values, fake-ip layout and top-level TUN compatibility verified')
+print('Upstream DNS values and fake-ip layout compatibility verified')
