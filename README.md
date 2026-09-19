@@ -35,7 +35,7 @@ device-provisioning.googleapis.com
 firebaseinstallations.googleapis.com
 ```
 
-全量版仍保留上游的独立 `FCM` 策略组，可根据实际网络环境选择直连或固定代理出口。`fake-ip-filter` 只负责让这些域名返回 real IP，不会强制改变其最终的 DIRECT / Proxy 路由策略。
+全量版仍保留上游的独立 `FCM` 策略组，可根据实际网络环境选择直连或固定代理出口。`fake-ip-filter` 只负责让这些域名返回 real IP，不会强制改变其最终的 DIRECT / Proxy 路由策略。 极简模式则遵循上游设计，不额外注入 FCM fake-IP 规则。
 
 ### 2. 国内 QUIC 放行判断优化
 

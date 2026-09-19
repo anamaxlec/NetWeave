@@ -86,6 +86,13 @@ CONDITIONAL_GOOGLEFCM = re.compile(
 )
 
 
+MINIMAL_MODE_GOOGLEFCM = re.compile(
+    r"(?m)^(?P<indent>[ \t]*)\.\.\.\(\s*minimalModeEnabled\s*\?\s*\[\s*\]\s*:\s*"
+    r"ruleOptionsEnable\[['\"]FCM['\"]\]\s*\?\s*\[\s*['\"]rule-set:googlefcm['\"]\s*\]\s*"
+    r":\s*\[\s*\]\s*\),\s*$"
+)
+
+
 def ensure_after(entries, anchor, value):
     if value in entries:
         return entries
@@ -232,11 +239,16 @@ def ensure_fcm_fallback_constant(text, path):
 
 
 def patch_js_fake_ip_filter(text, path):
-    # 跟随上游的声明式数组结构，只做最小语义差异：googlefcm 永久在线 + fallback spread。
+    # 普通模式保持 googlefcm real-IP 保护；极简模式遵循上游语义，
+    # 不额外注入 FCM fake-IP 规则。
     def normalize_conditional(match):
         return f"{match.group('indent')}'rule-set:googlefcm',"
 
+    def normalize_minimal_conditional(match):
+        return f"{match.group('indent')}...(minimalModeEnabled ? [] : ['rule-set:googlefcm']),"
+
     text = CONDITIONAL_GOOGLEFCM.sub(normalize_conditional, text)
+    text = MINIMAL_MODE_GOOGLEFCM.sub(normalize_minimal_conditional, text)
     text = re.sub(rf'(?m)^[ \t]*{re.escape(FAKE_IP_COMMENT)}\n', '', text)
 
     marker = "'fake-ip-filter': ["
@@ -251,13 +263,13 @@ def patch_js_fake_ip_filter(text, path):
     spread_line_start = text.rfind('\n', 0, spread_pos) + 1
 
     prefix = text[line_start:spread_line_start]
-    # 上游可能将 FCM 条目包在 minimalModeEnabled / ruleOptionsEnable 的嵌套条件中。
-    # NetWeave 的 fake-ip 保护需要始终生效，因此统一删除包含 googlefcm 的条件行，
-    # 再在 geolocation-cn 后插入固定 rule-set 条目。
-
     filtered_lines = []
+    has_minimal_googlefcm = False
     for line in prefix.splitlines(keepends=True):
         if "'rule-set:googlefcm'" in line:
+            if 'minimalModeEnabled' in line:
+                filtered_lines.append(line)
+                has_minimal_googlefcm = True
             continue
         if '...fcmRealIpFallback' in line:
             continue
@@ -273,7 +285,8 @@ def patch_js_fake_ip_filter(text, path):
         raise RuntimeError(f'{path}: geolocation-cn entry not found in fake-ip-filter')
 
     item_indent = re.match(r'\s*', filtered_lines[geo_index]).group(0)
-    filtered_lines.insert(geo_index + 1, f"{item_indent}'rule-set:googlefcm',\n")
+    if not has_minimal_googlefcm:
+        filtered_lines.insert(geo_index + 1, f"{item_indent}'rule-set:googlefcm',\n")
 
     spread_indent = re.match(r'\s*', text[spread_line_start:spread_pos]).group(0)
     rebuilt = ''.join(filtered_lines) + f'{spread_indent}...fcmRealIpFallback,\n'
