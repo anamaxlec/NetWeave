@@ -286,7 +286,13 @@ def patch_js_fake_ip_filter(text, path):
 
     item_indent = re.match(r'\s*', filtered_lines[geo_index]).group(0)
     if not has_minimal_googlefcm:
-        filtered_lines.insert(geo_index + 1, f"{item_indent}'rule-set:googlefcm',\n")
+        if path.name == 'Script.js':
+            filtered_lines.insert(
+                geo_index + 1,
+                f"{item_indent}...(ruleOptionsEnable.极简模式 ? [] : ['rule-set:googlefcm']),\n",
+            )
+        else:
+            filtered_lines.insert(geo_index + 1, f"{item_indent}'rule-set:googlefcm',\n")
 
     spread_indent = re.match(r'\s*', text[spread_line_start:spread_pos]).group(0)
     rebuilt = ''.join(filtered_lines) + f'{spread_indent}...fcmRealIpFallback,\n'
