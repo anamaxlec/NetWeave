@@ -81,11 +81,15 @@ jobs:
 
           git commit --no-edit
 
+      - name: Install formatter
+        run: npm install -g prettier
+
       - name: Preserve downstream customizations
         run: |
           python3 .github/scripts/preserve_upstream_compat.py
           python3 .github/scripts/preserve_downstream.py
           python3 .github/scripts/preserve_service_groups.py
+          prettier --write Config/mihomoConfig.yaml Config/mihomoConfigLite.yaml Script/Script.js Script/mihomoScript.js
 
       - name: Verify downstream patches are idempotent
         shell: bash
@@ -102,6 +106,7 @@ jobs:
           python3 .github/scripts/preserve_upstream_compat.py
           python3 .github/scripts/preserve_downstream.py
           python3 .github/scripts/preserve_service_groups.py
+          prettier --write "${files[@]}"
           git diff -- "${files[@]}" > /tmp/netweave-after.diff
 
           if ! cmp -s /tmp/netweave-before.diff /tmp/netweave-after.diff; then

@@ -251,8 +251,9 @@ def patch_js_fake_ip_filter(text, path):
     spread_line_start = text.rfind('\n', 0, spread_pos) + 1
 
     prefix = text[line_start:spread_line_start]
-    if 'ruleOptionsEnable' in prefix and 'googlefcm' in prefix:
-        raise RuntimeError(f'{path}: unsupported conditional googlefcm syntax; refusing to rewrite nested JS')
+    # 上游可能将 FCM 条目包在 minimalModeEnabled / ruleOptionsEnable 的嵌套条件中。
+    # NetWeave 的 fake-ip 保护需要始终生效，因此统一删除包含 googlefcm 的条件行，
+    # 再在 geolocation-cn 后插入固定 rule-set 条目。
 
     filtered_lines = []
     for line in prefix.splitlines(keepends=True):
