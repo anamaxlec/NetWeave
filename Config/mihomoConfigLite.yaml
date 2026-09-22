@@ -393,7 +393,7 @@ proxy-groups:
   - name: 'AI'
     <<: [*group_common_select, *proxies_default]
     default-selected: '美国'
-    icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/ChatGPT.svg'
+    icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg'
 
   - name: 'Telegram'
     <<: [*group_common_select, *proxies_default]

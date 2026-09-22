@@ -7,14 +7,15 @@
 
 ## 0. 快速索引
 
-| 项                               | 位置 / 规则                                                                                                           |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| 原始位图参考                     | `Icons/png/<Name>.png`                                                                                                |
-| 统一化矢量（对外提供的就是这套） | `Icons/svg/<Name>.svg`                                                                                                |
-| 命名                             | PascalCase、无下划线/连字符；png 与 svg **同名一一对应**（当前 36 对）                                                |
-| 引用格式                         | `https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/<Name>.svg`                                           |
-| 引用位置                         | `Script/mihomoScript.js`、`Script/Script.js`、`Config/mihomoConfig.yaml`、`Config/mihomoConfigLite.yaml`（共 116 处） |
-| 回归测试                         | `node Test/run-tests.js`（改过脚本必跑，当前 192 项）                                                                 |
+| 项                               | 位置 / 规则                                                                                                                                                                                                                                                |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 原始位图参考                     | `Icons/png/<Name>.png`                                                                                                                                                                                                                                     |
+| 统一化矢量（对外提供的就是这套） | `Icons/svg/<Name>.svg`                                                                                                                                                                                                                                     |
+| 命名                             | PascalCase、无下划线/连字符；png 与 svg **同名一一对应**（当前 37 对）                                                                                                                                                                                     |
+| 引用格式                         | `https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/<Name>.svg`；**JS 脚本里前缀已提为 `iconBaseUrl`**，写成 `` `${iconBaseUrl}<Name>.svg` ``；YAML 不支持变量，仍写全量                                                                       |
+| 引用位置                         | `Script/mihomoScript.js`（42）、`Script/Script.js`（24）、`Config/mihomoConfig.yaml`（34）、`Config/mihomoConfigLite.yaml`（18）（共 118 处）                                                                                                              |
+| 规则集引用                       | 脚本里已提为 `const ruleSetBaseUrl`（`…/gh/appshubcc/bett-rules@meta/geo/`），写成 `` `${ruleSetBaseUrl}geosite/<name>.mrs` ``；`path-in-bundle` 是包内本地路径，与之无关；少数第三方规则集（Emby / emos / adblock / cn-additional）仓库不同，仍写全量 URL |
+| 回归测试                         | `node Test/run-tests.js`（改过脚本必跑，当前 192 项；含 ES2020 语法检查与 QuickJS 实跑 `main()`）                                                                                                                                                          |
 
 ---
 
@@ -33,9 +34,10 @@
 - `s  = 1024 / max(bw, bh)`
 - `tx = (1024 - bw*s) / 2 - bx*s`，`ty = (1024 - bh*s) / 2 - by*s`
 - `(bx, by, bw, bh)` = **可见内容包围盒**（见 §1.2）。效果：内容最长边正好 1024，另一方向等比居中留白（**已确认的语义**，非 1:1 图标不要拉伸铺满）。
-- `transform` 只有 `tx/ty` 全为 0 且 `s == 1` 时才省略（如 Ehentai）。
+- `transform` 只有 `tx/ty` 全为 0 且 `s == 1` 时才省略（如 EHentai）。
 - 文件风格：LF 换行、2 空格缩进、一个标签一行、属性不折行；不加 `<?xml?>` 声明。
 - 渐变坐标**不用改**：`userSpaceOnUse` 的坐标随外层 `scale` 一起缩放；`objectBoundingBox` 本来就与坐标无关。
+- **默认带渐变**：每条上色 `path` 的 `fill` 用 `linearGradient`（写法与验收见 §3.3），不要写成纯色。
 
 ### 1.2 内容包围盒怎么量（关键，别用 getBBox）
 
@@ -66,16 +68,16 @@ const box = [vbX + x0 * upp, vbY + y0 * upp, (x1 - x0 + 1) * upp, (y1 - y0 + 1) 
 
 ### 1.4 逐文件特殊处理（历史包袱，勿回退）
 
-| 文件                                       | 原写法                                                     | 处理方式与原因                                                                                                                 |
-| ------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `TikTok.svg`                               | `<style>` 里 `.cls-2/.cls-3` 上色                          | 内联为 `fill`。Flutter 忽略 `<style>` → 否则 4 条路径**完全不上色**                                                            |
-| `Netflix.svg`                              | 死代码 `<style>`、`style="fill:..."`、内容超 viewBox       | 内联/清理 + 显式 `clipPath`                                                                                                    |
-| `Bitcoin.svg`                              | `filter` 阴影 + `mix-blend-mode` 高光                      | 删 `filter` 与两个黑色阴影 `use`（Flutter 会把阴影画成实心黑块；参考 PNG 本身也没阴影）；`mix-blend-mode` **必须留在 `style`** |
-| `Line.svg`                                 | `<mask>` 做"挖空填白"                                      | 改成「气泡(渐变) + 字母(直接填白)」。Flutter 的 mask 只按形状裁剪，没有亮度语义                                                |
-| `Google.svg`                               | 9 条 path 挂 `feGaussianBlur` 磨接缝                       | 删 filter + 补 `clipPath`；1024px 平均色差仅 0.5/255                                                                           |
-| `Ehentai.svg`                              | 8 个 `<rect>` + 冗余 `<g>`                                 | 合成 1 条 path                                                                                                                 |
-| `WorldMap.svg`                             | 只有位图，无矢量                                           | 见 §3.2（剪影描摹 + 实测线性渐变）                                                                                             |
-| `ChatGPT.svg` / `Auto.svg` / `Bitcoin.svg` | 用户在统一化之后手工改过（更短的路径 / 4 空格 + 属性折行） | **不要**再按流程重跑覆盖                                                                                                       |
+| 文件                                      | 原写法                                                     | 处理方式与原因                                                                                                                 |
+| ----------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `TikTok.svg`                              | `<style>` 里 `.cls-2/.cls-3` 上色                          | 内联为 `fill`。Flutter 忽略 `<style>` → 否则 4 条路径**完全不上色**                                                            |
+| `Netflix.svg`                             | 死代码 `<style>`、`style="fill:..."`、内容超 viewBox       | 内联/清理 + 显式 `clipPath`                                                                                                    |
+| `Bitcoin.svg`                             | `filter` 阴影 + `mix-blend-mode` 高光                      | 删 `filter` 与两个黑色阴影 `use`（Flutter 会把阴影画成实心黑块；参考 PNG 本身也没阴影）；`mix-blend-mode` **必须留在 `style`** |
+| `Line.svg`                                | `<mask>` 做"挖空填白"                                      | 改成「气泡(渐变) + 字母(直接填白)」。Flutter 的 mask 只按形状裁剪，没有亮度语义                                                |
+| `Google.svg`                              | 9 条 path 挂 `feGaussianBlur` 磨接缝                       | 删 filter + 补 `clipPath`；1024px 平均色差仅 0.5/255                                                                           |
+| `EHentai.svg`                             | 8 个 `<rect>` + 冗余 `<g>`                                 | 合成 1 条 path                                                                                                                 |
+| `WorldMap.svg`                            | 只有位图，无矢量                                           | 见 §3.2（剪影描摹 + 实测线性渐变）                                                                                             |
+| `OpenAI.svg` / `Auto.svg` / `Bitcoin.svg` | 用户在统一化之后手工改过（更短的路径 / 4 空格 + 属性折行） | **不要**再按流程重跑覆盖                                                                                                       |
 
 ---
 
@@ -119,16 +121,10 @@ const box = [vbX + x0 * upp, vbY + y0 * upp, (x1 - x0 + 1) * upp, (y1 - y0 + 1) 
 
 **红色基准 = 美国国旗**：`America.svg` 的红色渐变（亮端 `#F92F32`、暗端 `#C00405`，整体均值 ≈ (221,24,26)）是这套图标红色的参照。
 
-- 渐变类：**暗端统一 `#C00405`**，亮端保留原值 → 整体略微提亮
+- 红色渐变类：**暗端统一 `#C00405`**，亮端保留原值 → 整体略微提亮
   （YouTube `#FF4040`、China `#FF3C3B`、HongKong `#FF3F3E`、Taiwan `#FF403F`、Japan `#F73A38`、Singapore `#FC3838`）；
-- **纯色 → 竖直渐变**（“和 YouTube 一样的效果”）：换掉纯色 `fill`，在同一个 `<g>` 内加
-  `<defs><linearGradient gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="<内容盒高度>">`，**亮端在上、暗端在下**（与 YouTube 同向）：
-  - `Ehentai.svg`：`#FF4040` → `#C00405`（与 YouTube 完全同款，内容盒 y 0~480）；
-  - `Fcm.svg`（**分层多色**图标）：**千万不能**把多层压成一条整体渐变，否则花色层次全丢。正确做法是**保留原有每条 path 与各自基色**，每层各做一条**同几何范围**（同一个父 `<g>`、`y 0~1640` = 内容盒全高）的竖直渐变：**顶端 = 基色原样，底端 = 基色 × 0.88**：
-    `#FECA45→#E0B23D`、`#FEA610→#E0920E`、`#FD830E→#DF730C`。
-    同几何范围保证各层“变暗比例”一致 → 层次与配色关系照旧，只多了一层上亮下暗的 shading（实测整体均值 (254,185,50)→(237,173,46)，逐行色阶跳变数与原来一致）。
-    **别删冗余 path**：压成 1 条剪影会差 1433 像素（外轮廓里有小缺口/小岛），且会丢掉分层。
-- 量法：渲染到 1024，对满足 `R-max(G,B) > 40` 的像素求均值，看是否向 (221,24,26) 收敛；渐变类再取 y=100/300/500/700/900 的逐行均值，确认“上亮下暗”。
+- 量法：渲染到 1024，对满足 `R-max(G,B) > 40` 的像素求均值，看是否向 (221,24,26) 收敛。
+- **「纯色 → 竖直渐变」（“和 YouTube 一样的效果”）的完整做法与验收标准见 §3.3。**
 
 ### 2.2 描摹轮廓外溢：用 `clipPath` 兜底
 
@@ -152,14 +148,15 @@ const box = [vbX + x0 * upp, vbY + y0 * upp, (x1 - x0 + 1) * upp, (y1 - y0 + 1) 
 
 ## 3. 新增/替换图标的标准流程
 
-```
+```txt
 1) 取源图（png/jpg/svg）→ Icons/png/<Name>.png（命名见 §4）
 2) 若只有位图 → 用 vtracer 描摹或"剪影+渐变"降级（见 3.1 / 3.2）
 3) 量可见内容盒（§1.2）→ 生成 1024 版本（§1.1）+ 简化（§1.3）
-4) 像素校验（§5）→ 兼容性检查（§2）
-5) 同步引用：脚本/配置里的 icon 链接改成 Icons/svg/<Name>.svg（§4）
-6) git add + 跑 node Test/run-tests.js（改了脚本才需要）
-7) 清理所有临时文件
+4) **加渐变效果（默认必做，不用用户提）** → 按 §3.3；分层图标有硬规则，别压成一条
+5) 像素校验（§5）→ 兼容性检查（§2）
+6) 同步引用：脚本/配置里的 icon 链接改成 Icons/svg/<Name>.svg（§4）
+7) git add + 跑 node Test/run-tests.js（改了脚本才需要）
+8) 清理所有临时文件
 ```
 
 ### 3.1 vtracer 描摹（位图 → 矢量）
@@ -189,6 +186,55 @@ vtracer.exe -i in.png -o out.svg --clustering color-cluster --hierarchical cutou
 4. 组装：`<defs><linearGradient gradientUnits="userSpaceOnUse" .../></defs>` + `<g fill="url(#...)"` 包住 path；
 5. 校验：把新 SVG 与参考 PNG 都渲染到 1024，按内容盒**逐行取不透明像素均值**比色（WorldMap 每行 Δ ≤ 1/255）。
 
+### 3.3 加渐变效果（**统一化默认必做**，与 YouTube 同款）
+
+**这一步不是可选项**：统一化任何图标都要带上渐变（§3 流程第 4 步），只有用户明确说“不要渐变 / 保持原样”时才跳过。做法按图标分型：
+
+| 图标类型                     | 默认做法                                                                              | 用户指定“和 YouTube 一样”时                              |
+| ---------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 单色/块状（整块一个色）      | 一条整体竖直渐变：**该色原样 → 该色 × 0.88**（保色相，最稳）                          | 换成 YouTube 的调色：`#FF4040 → #C00405`（EHentai 实例） |
+| **分层多色**（多层各自成块） | **保留每条 path 与各自基色**，每层各一条渐变：**顶端 = 基色原样，底端 = 基色 × 0.88** | 同理，只改 stop 颜色，几何范围不动                       |
+
+硬规则（两类都适用）：
+
+1. **渐变写在变换后的 `<g>` 内部**（`<defs>` 跟着进去）→ `gradientUnits="userSpaceOnUse"` 的坐标就是**内容坐标**，与外层 `scale` 无关（§1.1）；
+2. 渐变范围取**内容盒的 y 起止**，不是 `0`~`1024`（EHentai `y 0~480`、Fcm `y 0~1640`、PayPal `y 3~48`）；`x1=x2=0` 即纯竖直；
+3. 方向统一 **亮端在上（`offset="0"`）、暗端在下（`offset="100%"`）**，与 YouTube 同向；
+4. 每条 path 都写**显式** `fill="url(#id)"`（理由见 §2.1，别靠继承）；id 用 `<图标名小写><序号>`（`fcm1` / `paypal3`）。
+
+**分层图标的关键**：所有层用**同一对 `y1/y2`**（同一个父 `<g>` 下），这样各层“变暗比例”完全一致 → 层次与配色关系照旧，只多一层上亮下暗的 shading。**绝不能**把多层合并成一条整体渐变（Fcm 第一次就是这么错的，花色层次全丢）。
+
+```xml
+<g transform="translate(tx ty) scale(s)">
+    <defs>
+        <linearGradient id="paypal1" gradientUnits="userSpaceOnUse" x1="0" y1="3" x2="0" y2="48">
+            <stop offset="0" stop-color="#002991" />
+            <stop offset="100%" stop-color="#002480" />
+        </linearGradient>
+        <!-- 其余层同理，仅 stop 颜色不同 -->
+    </defs>
+    <path fill="url(#paypal1)" d="..." />
+</g>
+```
+
+- `0.88` 是默认的“底端变暗比例”：`#002991→#002480`、`#60CDFF→#54B4E0`；想更明显用 `0.80`，想更保守用 `0.95`。
+- **别删“冗余” path**：分层文件里看似被遮住的 path 可能补着外轮廓的小缺口 —— Fcm 压成 1 条剪影会差 1433 像素，且会丢层次。
+
+**验收（必做，两条都要过）**：
+
+1. **上亮下暗**：渲染到 1024，取 `y = 100/300/500/700/900` 的逐行不透明像素均值，整体应上亮下暗（某行突然变亮通常是该行露出了另一层 → 再在同一层内上下取两个像素确认层内单调）；
+2. **层次未变**：把 `fill="url(#…)"` 换成各自基色得到“同几何平色版”，两版**逐行色阶跳变数应基本一致**（几何与层次其实由路径数据保证，同一行的 ±1 只是 30 这个阈值卡在 AA 边缘上）；两版平均像素差按“底端变暗比例 × 图标颜色/面积”而定：Fcm ≈ 15、PayPal ≈ 12、**PikPak ≈ 32（白色层被压到 224 所以偏大）**、Apple ≈ 15（/1020），**10~35 都算正常**，总体均值只应下降几个百分点。
+
+已入库的回归基线：
+
+| 文件          | 层数 | 渐变                                                    | 内容盒 y |
+| ------------- | ---- | ------------------------------------------------------- | -------- |
+| `EHentai.svg` | 1    | `#FF4040 → #C00405`                                     | 0 ~ 480  |
+| `Fcm.svg`     | 4    | `#FECA45→#E0B23D`、`#FEA610→#E0920E`、`#FD830E→#DF730C` | 0 ~ 1640 |
+| `PayPal.svg`  | 3    | `#002991→#002480`、`#60CDFF→#54B4E0`、`#008CFF→#007BE0` | 3 ~ 48   |
+
+（EHentai 是“用户指定 YouTube 同款调色”的例子；Fcm / PayPal 是“默认 × 0.88”的例子。）
+
 ---
 
 ## 4. 命名与引用
@@ -202,16 +248,17 @@ vtracer.exe -i in.png -o out.svg --clustering color-cluster --hierarchical cutou
 | United_States       | `America`                 |
 | Available_1         | `Available`               |
 | Google_Search       | `Google`                  |
-| exhentai            | `Ehentai`                 |
+| exhentai            | `EHentai`                 |
 | Hong_Kong           | `HongKong`                |
 | Round_Robin         | `RoundRobin`              |
 | TikTok              | `TikTok`                  |
-| fcm / meta / pikpak | `Fcm` / `Meta` / `Pikpak` |
+| fcm / meta / pikpak | `Fcm` / `Meta` / `PikPak` |
+| paypal (thesvg)     | `PayPal`                  |
 | World_Map           | `WorldMap`                |
 
 - 引用格式（**CDN 前缀固定不变**）：
 
-```
+```txt
 https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/<Name>.svg
 ```
 
@@ -249,8 +296,8 @@ Start-Process -FilePath "<python.exe>" -ArgumentList '-m','http.server','8765','
 
 ---
 
-## 7. 当前图标清单（36）
+## 7. 当前图标清单（37）
 
-`AdBlock, Airport, America, Apple, Auto, Available, Bitcoin, Bypass, ChatGPT, China, Ehentai, Emby, Fcm, Global, Google, HongKong, Japan, Line, Meta, Microsoft, Netflix, Pikpak, Proxy, RoundRobin, Server, Singapore, Spotify, Stack, Static, Steam, Taiwan, Telegram, TikTok, Twitter, WorldMap, YouTube`
+`AdBlock, Airport, America, Apple, Auto, Available, Bitcoin, Bypass, OpenAI, China, EHentai, Emby, Fcm, Global, Google, HongKong, Japan, Line, Meta, Microsoft, Netflix, PayPal, PikPak, Proxy, RoundRobin, Server, Singapore, Spotify, Stack, Static, Steam, Taiwan, Telegram, TikTok, Twitter, WorldMap, YouTube`
 
 每个文件里都已烘焙好 `translate(tx ty) scale(s)`，需要复现规则时直接读该文件的 `transform` 即可。
