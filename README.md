@@ -87,6 +87,9 @@ Cloudflare DoH / Google DoH
 默认代理
 ```
 
+上游更具体的 DNS policy（例如 `private → system`、`douyin → system / 字节系 DNS`）继续保留，并优先于通用 `cn` / `geolocation-cn` 规则；因此这些特定域名可能不走国内 DoH。
+
+
 也就是说，`default-nameserver` 的 bootstrap/default 解析和主要国内业务域名解析都使用国内 DoH；同时保留 `rule-set:geolocation-cn`，避免只靠 `rule-set:cn` 时部分国内 CDN 域名落回国外 DNS。
 
 这样不需要单独维护微信、微博、抖音、小红书、淘宝等 App 的 CDN 域名列表；只要域名进入通用中国规则集，就会自动使用国内 DNS 出口获得更合适的 CDN 调度。
@@ -124,6 +127,7 @@ AIsouler/MyClash main
 无冲突 → 直接继续
 有已知冲突：
   README → 保留 NetWeave
+  AGENT / Icons → 直接跟随上游
   Script / Config → 采用上游最新结构
         ↓
 重放 NetWeave 最小语义 patch

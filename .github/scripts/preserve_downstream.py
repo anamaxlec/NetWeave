@@ -300,6 +300,44 @@ def patch_js_fake_ip_filter(text, path):
     return text[:line_start] + comment + rebuilt + text[spread_line_start:]
 
 
+def ensure_static_foreign_nameserver(text, path):
+    dns_start = text.find('\ndns:\n')
+    hosts_start = text.find('\nhosts:\n', dns_start)
+    if dns_start == -1 or hosts_start == -1:
+        raise RuntimeError(f'{path}: dns/hosts section boundaries not found')
+
+    block = text[dns_start:hosts_start]
+    if '  nameserver: *foreignDNS\n' in block:
+        return text
+
+    marker = '  nameserver-policy:\n'
+    relative = block.find(marker)
+    if relative == -1:
+        raise RuntimeError(f'{path}: nameserver-policy insertion point not found')
+
+    absolute = dns_start + relative
+    return text[:absolute] + '  nameserver: *foreignDNS\n' + text[absolute:]
+
+
+def ensure_js_foreign_nameserver(text, path):
+    dns_start = text.find('  const dns = {')
+    hosts_start = text.find('  const hosts = {', dns_start)
+    if dns_start == -1 or hosts_start == -1:
+        raise RuntimeError(f'{path}: generated dns/hosts block boundaries not found')
+
+    block = text[dns_start:hosts_start]
+    if '    nameserver: foreignDNS,\n' in block:
+        return text
+
+    marker = "    'nameserver-policy': {\n"
+    relative = block.find(marker)
+    if relative == -1:
+        raise RuntimeError(f'{path}: generated nameserver-policy insertion point not found')
+
+    absolute = dns_start + relative
+    return text[:absolute] + '    nameserver: foreignDNS,\n' + text[absolute:]
+
+
 def ensure_static_service_before_cn_fallback(text, path):
     # NetWeave 保持具体服务分流优先；geolocation-cn 只作为兜底，避免 Google 等全局域名误分类后被提前直连。
     rule = '  - RULE-SET,geolocation-cn,直连\n'
@@ -334,6 +372,7 @@ def patch_static(path):
     text = ensure_static_googlefcm_provider(text, path)
     text = remove_crypto_static(text)
     text = patch_static_fake_ip_filter(text, path)
+    text = ensure_static_foreign_nameserver(text, path)
     text = ensure_static_service_before_cn_fallback(text, path)
 
     default_ns = re.compile(r"(?m)^(\s*)default-nameserver:\s*\*(?:chinaDNS|chinaDohDNS)\s*$")
@@ -373,6 +412,7 @@ def patch_js(path):
     text = remove_crypto_js(text)
     text = ensure_fcm_fallback_constant(text, path)
     text = patch_js_fake_ip_filter(text, path)
+    text = ensure_js_foreign_nameserver(text, path)
     text = ensure_js_service_before_cn_fallback(text, path)
 
     default_ns = re.compile(r"(?m)^(\s*)'default-nameserver':\s*(?:chinaDNS|chinaDohDNS),\s*$")
@@ -431,6 +471,7 @@ for path in STATIC_FILES + JS_FILES:
                 raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
         required = [
             'default-nameserver: *chinaDohDNS',
+            'nameserver: *foreignDNS',
             "'rule-set:cn': *chinaDohDNS",
             "'rule-set:geolocation-cn': *chinaDohDNS",
         ]
@@ -444,6 +485,7 @@ for path in STATIC_FILES + JS_FILES:
                 raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
         required = [
             "'default-nameserver': chinaDohDNS,",
+            'nameserver: foreignDNS,',
             "'rule-set:cn': chinaDohDNS,",
             "'rule-set:geolocation-cn': chinaDohDNS,",
         ]

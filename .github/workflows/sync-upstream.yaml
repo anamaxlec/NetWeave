@@ -60,6 +60,10 @@ jobs:
                 # README 是 NetWeave 自己的项目说明。
                 git checkout --ours -- "$file"
                 ;;
+              AGENT.md|Icons/*)
+                # AGENT 与图标资源完全跟随上游；NetWeave 不在这些文件维护 downstream 差异。
+                git checkout --theirs -- "$file"
+                ;;
               Config/mihomoConfig.yaml|Config/mihomoConfigLite.yaml|Script/Script.js|Script/mihomoScript.js)
                 # 核心文件先采用上游最新结构，再统一重放 NetWeave 的最小语义 patch。
                 git checkout --theirs -- "$file"
