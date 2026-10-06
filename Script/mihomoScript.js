@@ -407,7 +407,8 @@ const serviceConfigs = [
     name: 'FCM',
     baseOption: selectBaseOption,
     direct: true,
-    defaultSelected: '直连',
+    preferredDirect: '🇨🇳 直连 | IPv6优先',
+    defaultSelected: '🇨🇳 直连 | IPv6优先',
     providers: {
       googlefcm: {
         ...ruleProviderCommonDomain,
@@ -1187,6 +1188,10 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
             ...allProxiesNames,
             ...(svc.direct ? ['直连'] : []),
           ];
+    }
+
+    if (svc.preferredDirect && !groupProxies.includes(svc.preferredDirect)) {
+      groupProxies.unshift(svc.preferredDirect);
     }
 
     functionalGroups.push({

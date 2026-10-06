@@ -33,6 +33,7 @@ GOOGLEFCM_URL = 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/ge
 QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
 OLD_QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
 FAKE_IP_COMMENT = '// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底'
+FCM_IPV6_PREFER_DIRECT = '🇨🇳 直连 | IPv6优先'
 
 STATIC_HEADERS = {
     Path('Config/mihomoConfig.yaml'): """#  ---------说明---------
@@ -338,6 +339,91 @@ def ensure_js_foreign_nameserver(text, path):
     return text[:absolute] + '    nameserver: foreignDNS,\n' + text[absolute:]
 
 
+def ensure_static_fcm_ipv6_prefer(text, path):
+    if path.name != 'mihomoConfig.yaml':
+        return text
+
+    direct_start = text.find('  proxies_direct:\n')
+    direct_end = text.find('  proxies_reject:', direct_start)
+    if direct_start == -1 or direct_end == -1:
+        raise RuntimeError(f'{path}: proxies_direct block not found')
+    direct_block = text[direct_start:direct_end]
+    direct_options = re.findall(r"'([^']+)'", direct_block)
+    if '直连' not in direct_options:
+        raise RuntimeError(f'{path}: proxies_direct does not contain 直连')
+
+    fcm_start = text.find("  - name: 'FCM'\n")
+    fcm_end = text.find("  - name: 'YouTube'\n", fcm_start)
+    if fcm_start == -1 or fcm_end == -1:
+        raise RuntimeError(f'{path}: FCM proxy group block not found')
+    fcm_block = text[fcm_start:fcm_end]
+    icon_match = re.search(r"(?m)^    icon: .+$", fcm_block)
+    if not icon_match:
+        raise RuntimeError(f'{path}: FCM icon line not found')
+
+    options = [FCM_IPV6_PREFER_DIRECT] + [item for item in direct_options if item != FCM_IPV6_PREFER_DIRECT]
+    rebuilt = (
+        "  - name: 'FCM'\n"
+        "    <<: *group_common_select\n"
+        "    proxies:\n"
+        "      [\n"
+        + ''.join(f"        '{item}',\n" for item in options)
+        + "      ]\n"
+        f"    default-selected: '{FCM_IPV6_PREFER_DIRECT}'\n"
+        f"{icon_match.group(0)}\n\n"
+    )
+    return text[:fcm_start] + rebuilt + text[fcm_end:]
+
+
+def ensure_js_fcm_ipv6_prefer(text, path):
+    if path.name != 'mihomoScript.js':
+        return text
+
+    fcm_start = text.find("    name: 'FCM',")
+    fcm_end = text.find("  {\n    name: 'YouTube',", fcm_start)
+    if fcm_start == -1 or fcm_end == -1:
+        raise RuntimeError(f'{path}: FCM service config block not found')
+
+    block_start = text.rfind('  {\n', 0, fcm_start)
+    block = text[block_start:fcm_end]
+    block = re.sub(
+        r"(?m)^    defaultSelected: '[^']+',\s*$",
+        f"    defaultSelected: '{FCM_IPV6_PREFER_DIRECT}',",
+        block,
+        count=1,
+    )
+    if '    preferredDirect:' not in block:
+        marker = '    direct: true,\n'
+        if marker not in block:
+            raise RuntimeError(f'{path}: FCM direct marker not found')
+        block = block.replace(
+            marker,
+            marker + f"    preferredDirect: '{FCM_IPV6_PREFER_DIRECT}',\n",
+            1,
+        )
+    text = text[:block_start] + block + text[fcm_end:]
+
+    loop_start = text.find('  for (const svc of serviceConfigs) {')
+    loop_end = text.find("  functionalGroups.push({\n    ...selectBaseOption,\n    name: '漏网之鱼'", loop_start)
+    if loop_start == -1 or loop_end == -1:
+        raise RuntimeError(f'{path}: service group construction loop not found')
+    loop = text[loop_start:loop_end]
+    preferred_block = (
+        "    if (svc.preferredDirect && !groupProxies.includes(svc.preferredDirect)) {\n"
+        "      groupProxies.unshift(svc.preferredDirect);\n"
+        "    }\n\n"
+    )
+    if preferred_block not in loop:
+        marker = '    functionalGroups.push({\n'
+        pos = loop.find(marker)
+        if pos == -1:
+            raise RuntimeError(f'{path}: service group push marker not found')
+        loop = loop[:pos] + preferred_block + loop[pos:]
+        text = text[:loop_start] + loop + text[loop_end:]
+
+    return text
+
+
 def ensure_static_service_before_cn_fallback(text, path):
     # NetWeave 保持具体服务分流优先；geolocation-cn 只作为兜底，避免 Google 等全局域名误分类后被提前直连。
     rule = '  - RULE-SET,geolocation-cn,直连\n'
@@ -373,6 +459,7 @@ def patch_static(path):
     text = remove_crypto_static(text)
     text = patch_static_fake_ip_filter(text, path)
     text = ensure_static_foreign_nameserver(text, path)
+    text = ensure_static_fcm_ipv6_prefer(text, path)
     text = ensure_static_service_before_cn_fallback(text, path)
 
     default_ns = re.compile(r"(?m)^(\s*)default-nameserver:\s*\*(?:chinaDNS|chinaDohDNS)\s*$")
@@ -413,6 +500,7 @@ def patch_js(path):
     text = ensure_fcm_fallback_constant(text, path)
     text = patch_js_fake_ip_filter(text, path)
     text = ensure_js_foreign_nameserver(text, path)
+    text = ensure_js_fcm_ipv6_prefer(text, path)
     text = ensure_js_service_before_cn_fallback(text, path)
 
     default_ns = re.compile(r"(?m)^(\s*)'default-nameserver':\s*(?:chinaDNS|chinaDohDNS),\s*$")
@@ -500,6 +588,30 @@ for path in STATIC_FILES + JS_FILES:
 
 full_static = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
 full_js = Path('Script/mihomoScript.js').read_text(encoding='utf-8')
+
+static_fcm_start = full_static.find("  - name: 'FCM'\n")
+static_fcm_end = full_static.find("  - name: 'YouTube'\n", static_fcm_start)
+js_fcm_start = full_js.find("    name: 'FCM',")
+js_fcm_end = full_js.find("  {\n    name: 'YouTube',", js_fcm_start)
+if static_fcm_start == -1 or static_fcm_end == -1 or js_fcm_start == -1 or js_fcm_end == -1:
+    raise RuntimeError('FCM IPv6-prefer downstream protection failed: FCM block missing')
+static_fcm = full_static[static_fcm_start:static_fcm_end]
+js_fcm = full_js[js_fcm_start:js_fcm_end]
+for required in [
+    FCM_IPV6_PREFER_DIRECT,
+    f"default-selected: '{FCM_IPV6_PREFER_DIRECT}'",
+]:
+    if required not in static_fcm:
+        raise RuntimeError(f'FCM IPv6-prefer downstream protection failed: static group missing {required}')
+for required in [
+    f"preferredDirect: '{FCM_IPV6_PREFER_DIRECT}'",
+    f"defaultSelected: '{FCM_IPV6_PREFER_DIRECT}'",
+]:
+    if required not in js_fcm:
+        raise RuntimeError(f'FCM IPv6-prefer downstream protection failed: JS service config missing {required}')
+if 'groupProxies.unshift(svc.preferredDirect)' not in full_js:
+    raise RuntimeError('FCM IPv6-prefer downstream protection failed: preferredDirect injection missing')
+
 for forbidden in ["name: 'Crypto'", 'RULE-SET,cryptocurrency,Crypto', 'category-cryptocurrency.mrs']:
     if forbidden in full_static or forbidden in full_js:
         raise RuntimeError(f'Crypto downstream removal failed: still contains {forbidden}')

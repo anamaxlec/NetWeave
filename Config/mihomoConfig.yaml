@@ -552,8 +552,25 @@ proxy-groups:
     <<: *group_common_load
 
   - name: 'FCM'
-    <<: [*group_common_select, *proxies_direct]
-    default-selected: '直连'
+    <<: *group_common_select
+    proxies:
+      [
+        '🇨🇳 直连 | IPv6优先',
+        '默认代理',
+        '手动选择',
+        '自动选择',
+        '负载均衡',
+        '直连',
+        '香港',
+        '日本',
+        '美国',
+        '新加坡',
+        '台湾省',
+        '低倍率节点',
+        '高倍率节点',
+        '其他节点',
+      ]
+    default-selected: '🇨🇳 直连 | IPv6优先'
     icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Fcm.svg'
 
   - name: 'YouTube'

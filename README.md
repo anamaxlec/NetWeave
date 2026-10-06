@@ -37,6 +37,8 @@ firebaseinstallations.googleapis.com
 
 全量版仍保留上游的独立 `FCM` 策略组，可根据实际网络环境选择直连或固定代理出口。`fake-ip-filter` 只负责让这些域名返回 real IP，不会强制改变其最终的 DIRECT / Proxy 路由策略。 极简模式则遵循上游设计，不额外注入 FCM fake-IP 规则。
 
+全量版的 FCM 默认优先使用 `🇨🇳 直连 | IPv6优先`：当 `mtalk.google.com` 同时返回 A / AAAA 时优先建立 IPv6 连接，IPv6 不可用时仍可回落 IPv4。普通 `直连` 策略组及其他业务分流保持原有双栈行为，不会被这一设置一起改成 IPv6 优先。
+
 ### 2. 国内 QUIC 放行判断优化
 
 保留上游「屏蔽国外 QUIC」的设计，但扩大国内流量识别范围。
@@ -147,6 +149,7 @@ JS 语法 / whitespace 校验
 
 - `googlefcm` 基础 provider 与 `rule-set:googlefcm` real-IP 保护
 - Google 官方 FCM hostname 显式兜底
+- FCM 默认 IPv6 优先直连，并保留 IPv4 回落
 - 国内 QUIC 的 `geolocation-cn` 放行
 - `default-nameserver` 使用国内 DoH
 - `rule-set:cn` / `rule-set:geolocation-cn` 使用国内 DoH
