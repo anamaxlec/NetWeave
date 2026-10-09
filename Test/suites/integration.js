@@ -110,8 +110,14 @@ function runIntegrationTests(h, api, meta, fx, loadScript, scriptFile) {
     const out = api.main(fx.typicalSubscription());
     const tw = groupByName(out['proxy-groups'], '台湾省');
     h.assert(tw, 'TW 分组必须存在');
-    h.assert(out['proxy-groups'].some((g) => g.name === '台湾省-自动选择'), 'TW 自动选择组必须存在');
-    h.assert(out.proxies.some((p) => p.name.includes('台湾')), '台湾节点应保留');
+    h.assert(
+      out['proxy-groups'].some((g) => g.name === '台湾省-自动选择'),
+      'TW 自动选择组必须存在',
+    );
+    h.assert(
+      out.proxies.some((p) => p.name.includes('台湾')),
+      '台湾节点应保留',
+    );
   });
 
   // ---------------- DNS 与 hosts ----------------
