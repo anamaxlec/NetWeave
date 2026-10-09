@@ -86,7 +86,7 @@ jobs:
           git commit --no-edit
 
       - name: Install formatter
-        run: npm install -g prettier
+        run: npm install -g prettier@3.9.9
 
       - name: Preserve downstream customizations
         run: |
@@ -129,6 +129,7 @@ jobs:
         run: |
           npm --prefix Test install
           node Test/run-tests.js
+          python3 -m unittest discover -s Test -p 'test_netweave_*.py'
 
       - name: Commit protected downstream changes
         run: |

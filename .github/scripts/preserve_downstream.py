@@ -1,6 +1,14 @@
 from pathlib import Path
 import re
 
+from netweave_patch_helpers import (
+    ensure_full_script_tw,
+    ensure_static_tw,
+    parse_string_list_field,
+    verify_tw_full_js,
+    verify_tw_static,
+)
+
 FCM_DOMAINS = [
     'mtalk.google.com',
     'mtalk4.google.com',
@@ -190,14 +198,10 @@ def remove_crypto_js(text):
 
 
 def patch_static_fake_ip_filter(text, path):
-    # 静态 YAML 没有可复用的 JS 常量，保留显式 hostname；输出保持 Prettier 稳定格式。
+    # Read only the literal fake-ip-filter sequence, never adjacent DNS settings.
+    # Keep the original trailing newline and subsequent fields exactly intact.
     text = re.sub(r'(?m)^  # FCM .*\n', '', text)
-    start = text.find('  fake-ip-filter:')
-    end = text.find('  proxy-server-nameserver:', start)
-    if start == -1 or end == -1:
-        raise RuntimeError(f'{path}: fake-ip-filter section not found')
-
-    entries = re.findall(r"'([^']+)'", text[start:end])
+    entries, field_start, field_end = parse_string_list_field(text, 'fake-ip-filter')
     ensure_after(entries, 'rule-set:geolocation-cn', GOOGLEFCM_RULESET)
     for domain in FCM_DOMAINS:
         if domain not in entries:
@@ -208,9 +212,9 @@ def patch_static_fake_ip_filter(text, path):
         '  fake-ip-filter:\n'
         '    [\n'
         + ''.join(f"      '{entry}',\n" for entry in entries)
-        + '    ]\n'
+        + '    ]'
     )
-    return text[:start] + rebuilt + text[end:]
+    return text[:field_start] + rebuilt + text[field_end:]
 
 
 def ensure_fcm_fallback_constant(text, path):
@@ -457,6 +461,7 @@ def patch_static(path):
     text = replace_static_header(text, path)
     text = ensure_static_googlefcm_provider(text, path)
     text = remove_crypto_static(text)
+    text = ensure_static_tw(text, path)
     text = patch_static_fake_ip_filter(text, path)
     text = ensure_static_foreign_nameserver(text, path)
     text = ensure_static_fcm_ipv6_prefer(text, path)
@@ -497,6 +502,7 @@ def patch_js(path):
     text = replace_js_header(text, path)
     text = ensure_js_googlefcm_provider(text, path)
     text = remove_crypto_js(text)
+    text = ensure_full_script_tw(text, path)
     text = ensure_fcm_fallback_constant(text, path)
     text = patch_js_fake_ip_filter(text, path)
     text = ensure_js_foreign_nameserver(text, path)
@@ -554,6 +560,7 @@ for path in STATIC_FILES + JS_FILES:
         raise RuntimeError(f'{path}: missing protected China QUIC rule')
 
     if path.suffix == '.yaml':
+        verify_tw_static(text, path)
         for domain in FCM_DOMAINS:
             if domain not in text:
                 raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
@@ -588,6 +595,7 @@ for path in STATIC_FILES + JS_FILES:
 
 full_static = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
 full_js = Path('Script/mihomoScript.js').read_text(encoding='utf-8')
+verify_tw_full_js(full_js, Path('Script/mihomoScript.js'))
 
 static_fcm_start = full_static.find("  - name: 'FCM'\n")
 static_fcm_end = full_static.find("  - name: 'YouTube'\n", static_fcm_start)

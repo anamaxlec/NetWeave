@@ -38,7 +38,7 @@ jobs:
           node-version: '24'
 
       - name: install tools
-        run: npm install -g prettier
+        run: npm install -g prettier@3.9.9
 
       - name: check formatting
         run: git ls-files -z '*.js' '*.yml' '*.yaml' | xargs -0 -r prettier --check
@@ -64,4 +64,6 @@ jobs:
         run: npm --prefix Test install
 
       - name: run tests
-        run: node Test/run-tests.js
+        run: |
+          node Test/run-tests.js
+          python3 -m unittest discover -s Test -p 'test_netweave_*.py'

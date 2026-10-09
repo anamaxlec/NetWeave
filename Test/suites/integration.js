@@ -80,6 +80,40 @@ function runIntegrationTests(h, api, meta, fx, loadScript, scriptFile) {
     }
   });
 
+  // ---------------- NetWeave downstream regressions ----------------
+  h.section('集成测试 · NetWeave 下游保护');
+  h.test('FCM real-IP 保护在常规模式保留，极简模式无独立 FCM 分流', () => {
+    const out = api.main(fx.typicalSubscription());
+    h.assert(out['rule-providers'].googlefcm, 'googlefcm provider 必须存在');
+    const filter = out.dns['fake-ip-filter'];
+    h.assert(filter.includes('mtalk.google.com'), 'FCM hostname 必须保留真实 IP 保护');
+    h.assert(filter.includes('rule-set:googlefcm'), 'FCM rule-set 必须保留真实 IP 保护');
+    if (meta.full) {
+      const fcm = groupByName(out['proxy-groups'], 'FCM');
+      h.assert(fcm, '全量版必须生成 FCM 策略组');
+      h.assertEqual(fcm['default-selected'], '🇨🇳 直连 | IPv6优先');
+      h.assert(fcm.proxies.includes('🇨🇳 直连 | IPv6优先'), 'FCM 组必须实际包含 IPv6 优先出口');
+      h.assertEqual(
+        out.proxies.find((p) => p.name === '🇨🇳 直连 | IPv6优先')['ip-version'],
+        'ipv6-prefer',
+        'FCM 的 IPv6 优先 DIRECT 必须存在',
+      );
+      const fcmIndex = out.rules.indexOf('RULE-SET,googlefcm,FCM');
+      const cnIndex = out.rules.indexOf('RULE-SET,geolocation-cn,直连');
+      h.assert(fcmIndex !== -1 && cnIndex > fcmIndex, 'FCM 分流应先于 geolocation-cn 兜底');
+    } else {
+      h.assert(!groupByName(out['proxy-groups'], 'FCM'), '精简版不新增独立 FCM 组');
+    }
+  });
+  h.test('全量版台湾地区节点保留独立分组', () => {
+    if (!meta.full) return;
+    const out = api.main(fx.typicalSubscription());
+    const tw = groupByName(out['proxy-groups'], '台湾省');
+    h.assert(tw, 'TW 分组必须存在');
+    h.assert(out['proxy-groups'].some((g) => g.name === '台湾省-自动选择'), 'TW 自动选择组必须存在');
+    h.assert(out.proxies.some((p) => p.name.includes('台湾')), '台湾节点应保留');
+  });
+
   // ---------------- DNS 与 hosts ----------------
   h.section('集成测试 · DNS 与 hosts');
   h.test('默认与代理服务器 DNS 使用各自的固定公共 DNS；无专属策略时私有 DNS 合并写入节点域名 policy', () => {

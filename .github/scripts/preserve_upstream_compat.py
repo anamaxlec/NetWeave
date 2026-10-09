@@ -200,40 +200,6 @@ def patch_js_tun(text, path):
     # Bettbox 已支持 mips；TUN stack 直接跟随上游，不再强制回退为 system。
     return text
 
-def ensure_full_script_taiwan_region(text, path):
-    # 上游 e324319 目前只从全量脚本移除了台湾地区定义，
-    # 但静态配置与上游测试仍要求台湾分组。仅在这种不一致状态下临时补回，
-    # 等上游配置/测试同步移除后自动停止生效。
-    if path.name != 'mihomoScript.js':
-        return text
-
-    static_full = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
-    unit_tests = Path('Test/suites/unit.js').read_text(encoding='utf-8')
-    upstream_still_expects_tw = (
-        'TW_filter:' in static_full
-        and "台湾 01 → 台湾省" in unit_tests
-    )
-    if not upstream_still_expects_tw or "name: '台湾省'" in text:
-        return text
-
-    start = text.find('const regionDefinitions = [')
-    if start == -1:
-        raise RuntimeError(f'{path}: regionDefinitions block not found')
-    end = text.find('\n];', start)
-    if end == -1:
-        raise RuntimeError(f'{path}: regionDefinitions closing marker not found')
-
-    block = (
-        "  {\n"
-        "    name: '台湾省',\n"
-        "    flag: '🇹🇼',\n"
-        "    regex: /🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan/i,\n"
-        "    icon: `${iconBaseUrl}Taiwan.svg`,\n"
-        "  },\n"
-    )
-    return text[:end] + '\n' + block + text[end:]
-
-
 def patch_static(path):
     text = path.read_text(encoding='utf-8')
     text = patch_static_dns(text, path)
@@ -246,7 +212,6 @@ def patch_js(path):
     text = patch_js_dns(text, path)
     text = normalize_js_fake_ip_filter(text, path)
     text = patch_js_tun(text, path)
-    text = ensure_full_script_taiwan_region(text, path)
     path.write_text(text, encoding='utf-8')
 
 
