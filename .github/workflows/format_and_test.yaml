@@ -63,6 +63,12 @@ jobs:
       - name: install dependencies
         run: npm --prefix Test install
 
+      - name: validate code syntax
+        run: |
+          node --check Script/Script.js
+          node --check Script/mihomoScript.js
+          python3 -m py_compile .github/scripts/netweave_patch_helpers.py .github/scripts/preserve_downstream.py .github/scripts/preserve_upstream_compat.py .github/scripts/preserve_service_groups.py
+
       - name: run tests
         run: |
           node Test/run-tests.js
