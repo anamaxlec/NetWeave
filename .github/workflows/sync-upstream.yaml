@@ -94,6 +94,7 @@ jobs:
           python3 .github/scripts/preserve_downstream.py
           python3 .github/scripts/preserve_service_groups.py
           prettier --write Config/mihomoConfig.yaml Config/mihomoConfigLite.yaml Script/Script.js Script/mihomoScript.js
+          prettier --write Test/suites/integration.js
 
       - name: Verify downstream patches are idempotent
         shell: bash
@@ -133,7 +134,7 @@ jobs:
 
       - name: Commit protected downstream changes
         run: |
-          git add Config/mihomoConfig.yaml Config/mihomoConfigLite.yaml Script/Script.js Script/mihomoScript.js
+          git add Config/mihomoConfig.yaml Config/mihomoConfigLite.yaml Script/Script.js Script/mihomoScript.js Test/suites/integration.js
           if git diff --cached --quiet; then
             echo "Downstream customizations already intact"
           else
