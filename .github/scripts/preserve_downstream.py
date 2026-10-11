@@ -7,6 +7,7 @@ from netweave_patch_helpers import (
     parse_string_list_field,
     verify_tw_full_js,
     verify_tw_static,
+    verify_googlefcm_provider,
 )
 
 FCM_DOMAINS = [
@@ -37,7 +38,6 @@ JS_FILES = [
 ]
 
 GOOGLEFCM_RULESET = 'rule-set:googlefcm'
-GOOGLEFCM_URL = 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/googlefcm.mrs'
 QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
 OLD_QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
 FAKE_IP_COMMENT = '// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底'
@@ -128,6 +128,7 @@ def replace_js_header(text, path):
     return JS_HEADERS[path].rstrip() + '\n\n' + text[idx:]
 
 
+
 def ensure_static_googlefcm_provider(text, path):
     if '\n  googlefcm:\n' in text:
         return text
@@ -137,10 +138,19 @@ def ensure_static_googlefcm_provider(text, path):
     if idx == -1:
         raise RuntimeError(f'{path}: rule-providers insertion point not found')
 
+    # Inherit the upstream rule provider mirror; never force the older CDN.
+    upstream_section = text[idx + len(marker):]
+    end = re.search(r'(?m)^  [a-zA-Z0-9_-]+:\n', upstream_section)
+    source = upstream_section[:end.start()] if end else upstream_section
+    url_match = re.search(r"(?m)^    url: '([^']+/geo/geosite/geolocation-!cn\.mrs)'\s*$", source)
+    if not url_match:
+        raise RuntimeError(f'{path}: upstream geolocation-!cn provider URL missing')
+    fcm_url = url_match.group(1).removesuffix('geolocation-!cn.mrs') + 'googlefcm.mrs'
+
     block = (
         "\n  googlefcm:\n"
         "    <<: *rule_providers_domain\n"
-        f"    url: '{GOOGLEFCM_URL}'\n"
+        f"    url: '{fcm_url}'\n"
         "    path: './ruleset/googlefcm.mrs'\n"
         "    path-in-bundle: 'geo/geosite/googlefcm.mrs'\n"
     )
@@ -166,7 +176,7 @@ def ensure_js_googlefcm_provider(text, path):
     block = (
         "\n  googlefcm: {\n"
         "    ...ruleProviderCommonDomain,\n"
-        f"    url: '{GOOGLEFCM_URL}',\n"
+        "    url: `\u0024{ruleSetBaseUrl}geosite/googlefcm.mrs`,\n"
         "    path: './ruleset/googlefcm.mrs',\n"
         "    'path-in-bundle': 'geo/geosite/googlefcm.mrs',\n"
         "  },\n"
@@ -554,8 +564,7 @@ for path in STATIC_FILES + JS_FILES:
         raise RuntimeError(f'{path}: NetWeave header was not preserved')
     if GOOGLEFCM_RULESET not in text:
         raise RuntimeError(f'{path}: missing {GOOGLEFCM_RULESET} in fake-ip-filter')
-    if GOOGLEFCM_URL not in text:
-        raise RuntimeError(f'{path}: missing always-available googlefcm provider')
+    verify_googlefcm_provider(text, path)
     if QUIC_RULE not in text:
         raise RuntimeError(f'{path}: missing protected China QUIC rule')
 

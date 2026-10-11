@@ -13,10 +13,35 @@ from netweave_patch_helpers import (  # noqa: E402
     parse_string_list_field,
     verify_tw_full_js,
     verify_tw_static,
+    verify_googlefcm_provider,
 )
 
 
 class NetWeavePatchTests(unittest.TestCase):
+    def test_googlefcm_provider_accepts_upstream_cdn_changes(self):
+        static = (ROOT / 'Config' / 'mihomoConfig.yaml').read_text(encoding='utf-8')
+        js = (ROOT / 'Script' / 'Script.js').read_text(encoding='utf-8')
+        original = 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta'
+        alternate = 'https://cdn.jsdmirror.com/gh/appshubcc/bett-rules@meta'
+        verify_googlefcm_provider(static, Path('Config/mihomoConfig.yaml'))
+        verify_googlefcm_provider(js, Path('Script/Script.js'))
+        verify_googlefcm_provider(static.replace(original, alternate), Path('Config/mihomoConfig.yaml'))
+        verify_googlefcm_provider(js.replace(original, alternate), Path('Script/Script.js'))
+
+    def test_googlefcm_provider_rejects_mismatched_rule_file(self):
+        static = (ROOT / 'Config' / 'mihomoConfig.yaml').read_text(encoding='utf-8')
+        js = (ROOT / 'Script' / 'Script.js').read_text(encoding='utf-8')
+        with self.assertRaises(RuntimeError):
+            verify_googlefcm_provider(
+                static.replace('geo/geosite/googlefcm.mrs', 'geo/geosite/youtube.mrs'),
+                Path('Config/mihomoConfig.yaml'),
+            )
+        with self.assertRaises(RuntimeError):
+            verify_googlefcm_provider(
+                js.replace("path: './ruleset/googlefcm.mrs'", "path: './ruleset/youtube.mrs'"),
+                Path('Script/Script.js'),
+            )
+
     def test_only_fake_ip_entries_are_extracted(self):
         src = (
             "dns:\n  fake-ip-filter:\n"

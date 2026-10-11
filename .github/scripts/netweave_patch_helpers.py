@@ -168,3 +168,44 @@ def verify_tw_full_js(text, path):
     end = text.find('\n];', start)
     if start == -1 or end == -1 or "name: '台湾省'" not in text[start:end]:
         raise RuntimeError(f'{path}: TW region missing from full script')
+
+def verify_googlefcm_provider(text, path):
+    """Check the always-available domain provider without pinning a CDN hostname.
+
+    The source may be an upstream mirror URL or the script's ruleSetBaseUrl.
+    The provider itself, its rule behavior and its bundle path must remain intact.
+    """
+    if path.suffix == '.yaml':
+        found = re.search(
+            r"(?ms)^  googlefcm:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)",
+            text,
+        )
+        if not found:
+            raise RuntimeError(f'{path}: googlefcm provider missing')
+        block = found.group('body')
+        required = ("<<: *rule_providers_domain", "path: './ruleset/googlefcm.mrs'",
+                    "path-in-bundle: 'geo/geosite/googlefcm.mrs'")
+        url = re.search(r"(?m)^    url: '(https?://[^']+)'\s*$", block)
+        valid_url = url is not None and url.group(1).endswith('/geo/geosite/googlefcm.mrs')
+    else:
+        start = text.find('const baseRuleProviders = {')
+        end = text.find('// 策略组公共配置', start)
+        if start == -1 or end == -1:
+            raise RuntimeError(f'{path}: baseRuleProviders boundaries missing')
+        found = re.search(
+            r"(?ms)^  googlefcm: \{\n(?P<body>.*?)^  \},\n",
+            text[start:end],
+        )
+        if not found:
+            raise RuntimeError(f'{path}: base googlefcm provider missing')
+        block = found.group('body')
+        required = ("...ruleProviderCommonDomain,", "path: './ruleset/googlefcm.mrs'",
+                    "'path-in-bundle': 'geo/geosite/googlefcm.mrs'")
+        url = re.search(r"(?m)^    url: (?:'([^']+)'|`([^`]+)`),\s*$", block)
+        value = next((v for v in url.groups() if v), '') if url else ''
+        valid_url = (
+            value.startswith('https://') and value.endswith('/geo/geosite/googlefcm.mrs')
+        ) or value == '$' + '{ruleSetBaseUrl}geosite/googlefcm.mrs'
+
+    if not valid_url or not all(field in block for field in required):
+        raise RuntimeError(f'{path}: googlefcm provider has unexpected URL, behavior or bundle path')
