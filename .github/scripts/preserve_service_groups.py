@@ -286,39 +286,3 @@ if yaml_rule_order != sorted(yaml_rule_order):
     raise RuntimeError('mihomoConfig.yaml: dedicated rule order is incorrect')
 
 print('Dedicated Gemini/OpenAI/Anthropic/GitHub groups verified with semantic patches')
- + '{ruleSetBaseUrl}geosite/' + filename
-    )
-    if not valid_url or not all(x in body for x in (
-        expected_type, f"path: './ruleset/{provider}.mrs'", expected_bundle
-    )):
-        raise RuntimeError(f'{name}: provider URL or path is invalid')
-
-js = FULL_JS.read_text(encoding='utf-8')
-yaml = FULL_STATIC.read_text(encoding='utf-8')
-
-for service in SERVICES:
-    name = service['name']
-    provider = service['provider']
-    if f"name: '{name}'" not in js or f'{name}: true' not in js:
-        raise RuntimeError(f'mihomoScript.js: missing {name} option/group')
-    if f'RULE-SET,{provider},{name}' not in js:
-        raise RuntimeError(f'mihomoScript.js: missing {name} rule')
-    if f"- name: '{name}'" not in yaml or f'RULE-SET,{provider},{name}' not in yaml:
-        raise RuntimeError(f'mihomoConfig.yaml: missing {name} group/rule')
-    if service['url'] not in js or service['url'] not in yaml:
-        raise RuntimeError(f'missing provider URL for {name}')
-
-if 'RULE-SET,github,默认代理' in js or 'RULE-SET,github,默认代理' in yaml:
-    raise RuntimeError('GitHub is still routed directly to 默认代理')
-
-js_order = [js.index(f"name: '{service['name']}'") for service in SERVICES]
-js_order.extend([js.index("name: 'Google'"), js.index("name: 'AI'")])
-if js_order != sorted(js_order):
-    raise RuntimeError('mihomoScript.js: dedicated service order is incorrect')
-
-yaml_rule_order = [yaml.index(f"RULE-SET,{service['provider']},{service['name']}") for service in SERVICES]
-yaml_rule_order.extend([yaml.index('RULE-SET,google,Google'), yaml.index('RULE-SET,ai,AI')])
-if yaml_rule_order != sorted(yaml_rule_order):
-    raise RuntimeError('mihomoConfig.yaml: dedicated rule order is incorrect')
-
-print('Dedicated Gemini/OpenAI/Anthropic/GitHub groups verified with semantic patches')
