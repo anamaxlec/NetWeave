@@ -197,6 +197,12 @@ const regionDefinitions = [
     regex: /🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan/i,
     icon: `${iconBaseUrl}Taiwan.svg`,
   },
+  {
+    name: '台湾省',
+    flag: '🇹🇼',
+    regex: /🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan/i,
+    icon: `${iconBaseUrl}Taiwan.svg`,
+  },
 ];
 
 // 定义倍率策略组
@@ -529,12 +535,6 @@ const serviceConfigs = [
     baseOption: selectBaseOption,
     direct: true,
     providers: {
-      github: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/github.mrs`,
-        path: './ruleset/github.mrs',
-        'path-in-bundle': 'geo/geosite/github.mrs',
-      },
       microsoft: {
         ...ruleProviderCommonDomain,
         url: `${ruleSetBaseUrl}geosite/microsoft.mrs`,
