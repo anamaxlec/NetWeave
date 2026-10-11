@@ -65,7 +65,7 @@ def js_service_block(service):
         "    providers: {\n"
         f"      {service['provider']}: {{\n"
         "        ...ruleProviderCommonDomain,\n"
-        "        url: " + chr(96) + "${ruleSetBaseUrl}geosite/" + filename + chr(96) + ",\\n"
+        "        url: " + chr(96) + "${ruleSetBaseUrl}geosite/" + filename + chr(96) + ",\n"
         f"        path: './ruleset/{service['provider']}.mrs',\n"
         f"        'path-in-bundle': 'geo/geosite/{filename}',\n"
         "      },\n"
@@ -100,7 +100,7 @@ def detach_github_from_microsoft_js(text):
     github_provider = re.compile(
         r"(?m)^      github: \{\n"
         r"        \.\.\.ruleProviderCommonDomain,\n"
-        r"        url: (?:'[^'\\n]+'|`[^`\\n]+`),\n"
+        r"        url: [^\n]+,\n"
         r"        path: '\./ruleset/github.mrs',\n"
         r"        'path-in-bundle': 'geo/geosite/github.mrs',\n"
         r"      \},\n"
@@ -224,25 +224,40 @@ def verify_service_provider(text, service, is_js):
     provider = service['provider']
     filename = service['url'].rsplit('/', 1)[-1]
     if is_js:
-        begin = text.find("    name: '{name}',".replace('{name}', name))
+        begin = text.find(f"    name: '{name}',")
         end = text.find("\n  },\n", begin)
         if begin == -1 or end == -1:
             raise RuntimeError(f'{name}: service config boundaries missing')
         segment = text[begin:end]
-        match = re.search(rf"(?ms)^      {re.escape(provider)}: \{{\n(?P<body>.*?)^      \}},\n", segment)
+        match = re.search(
+            rf"(?ms)^      {re.escape(provider)}: \{{\n(?P<body>.*?)^      \}},\n",
+            segment,
+        )
         expected_type = '...ruleProviderCommonDomain,'
         expected_bundle = f"'path-in-bundle': 'geo/geosite/{filename}'"
     else:
-        match = re.search(rf"(?ms)^  {re.escape(provider)}:\n(?P<body>.*?)(?=^  [\w-]+:\n|\Z)", text)
+        match = re.search(
+            rf"(?ms)^  {re.escape(provider)}:\n(?P<body>.*?)(?=^  [\w-]+:\n|\Z)",
+            text,
+        )
         expected_type = '<<: *rule_providers_domain'
         expected_bundle = f"path-in-bundle: 'geo/geosite/{filename}'"
+
     if not match:
         raise RuntimeError(f'{name}: dedicated provider definition missing')
     body = match.group('body')
-    url_match = re.search(r"(?m)^ +url: (?:'([^']+)'|`([^`]+)`),?\s*$", body)
-    url = next((v for v in url_match.groups() if v), '') if url_match else ''
-    valid_url = (url.startswith('https://') and url.endswith('/geo/geosite/' + filename)) or (
-        url == 'js = FULL_JS.read_text(encoding='utf-8')
+    source = next((line.strip() for line in body.splitlines() if line.strip().startswith('url: ')), '')
+    url = source.partition('url: ')[2].rstrip(',').strip().strip("'").strip(chr(96))
+    expected = '/geo/geosite/' + filename
+    valid_url = (url.startswith('https://') and url.endswith(expected)) or (
+        url == '$' + '{ruleSetBaseUrl}geosite/' + filename
+    )
+    required = (expected_type, f"path: './ruleset/{provider}.mrs'", expected_bundle)
+    if not valid_url or not all(field in body for field in required):
+        raise RuntimeError(f'{name}: provider URL or path is invalid')
+
+
+js = FULL_JS.read_text(encoding='utf-8')
 yaml = FULL_STATIC.read_text(encoding='utf-8')
 
 for service in SERVICES:
