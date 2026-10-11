@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 FULL_JS = Path('Script/mihomoScript.js')
 FULL_STATIC = Path('Config/mihomoConfig.yaml')
@@ -64,7 +65,7 @@ def js_service_block(service):
         "    providers: {\n"
         f"      {service['provider']}: {{\n"
         "        ...ruleProviderCommonDomain,\n"
-        f"        url: '{service['url']}',\n"
+        "        url: " + chr(96) + "${ruleSetBaseUrl}geosite/" + filename + chr(96) + ",\\n"
         f"        path: './ruleset/{service['provider']}.mrs',\n"
         f"        'path-in-bundle': 'geo/geosite/{filename}',\n"
         "      },\n"
@@ -95,16 +96,18 @@ def detach_github_from_microsoft_js(text):
         raise RuntimeError('mihomoScript.js: Microsoft/Apple service markers not found')
 
     block = text[start:end]
-    github = next(service for service in SERVICES if service['name'] == 'GitHub')
-    github_provider = (
-        f"      {github['provider']}: {{\n"
-        "        ...ruleProviderCommonDomain,\n"
-        f"        url: '{github['url']}',\n"
-        f"        path: './ruleset/{github['provider']}.mrs',\n"
-        f"        'path-in-bundle': 'geo/geosite/{github['url'].rsplit('/', 1)[-1]}',\n"
-        "      },\n"
+    # URL can change upstream. Remove github by its provider structure, independent of CDN.
+    github_provider = re.compile(
+        r"(?m)^      github: \{\n"
+        r"        \.\.\.ruleProviderCommonDomain,\n"
+        r"        url: (?:'[^'\\n]+'|`[^`\\n]+`),\n"
+        r"        path: '\./ruleset/github.mrs',\n"
+        r"        'path-in-bundle': 'geo/geosite/github.mrs',\n"
+        r"      \},\n"
     )
-    block = block.replace(github_provider, '', 1)
+    block = github_provider.sub('', block, count=1)
+    if '      github: {' in block:
+        raise RuntimeError('mihomoScript.js: GitHub provider remains inside Microsoft')
 
     # GitHub 曾被上游放在 Microsoft 组中。这里只删除这一条路由项，
     # 不依赖 Microsoft rules 数组的完整形态；这样新增 microsoft_ip 等规则时仍可继承。
@@ -131,12 +134,12 @@ def patch_js():
     FULL_JS.write_text(text, encoding='utf-8')
 
 
-def static_provider_block(service):
+def static_provider_block(service, url):
     filename = service['url'].rsplit('/', 1)[-1]
     return (
         f"  {service['provider']}:\n"
         "    <<: *rule_providers_domain\n"
-        f"    url: '{service['url']}'\n"
+        f"    url: '{url}'\n"
         f"    path: './ruleset/{service['provider']}.mrs'\n"
         f"    path-in-bundle: 'geo/geosite/{filename}'\n"
     )
@@ -151,7 +154,17 @@ def ensure_static_provider(text, service):
     idx = text.find(google_marker)
     if idx == -1:
         raise RuntimeError(f"mihomoConfig.yaml: Google provider marker not found for {service['name']}")
-    return text[:idx] + static_provider_block(service) + text[idx:]
+    # Match upstream's CDN/mirror when generating a missing service provider.
+    upstream_idx = text.find('  geolocation-!cn:\n')
+    if upstream_idx == -1:
+        raise RuntimeError('mihomoConfig.yaml: upstream geolocation-!cn provider missing')
+    source = text[upstream_idx:]
+    m = re.search(r"(?m)^    url: '(https?://[^']+/geo/geosite/geolocation-!cn\.mrs)'", source)
+    if not m:
+        raise RuntimeError('mihomoConfig.yaml: upstream provider mirror URL missing')
+    filename = service['url'].rsplit('/', 1)[-1]
+    url = m.group(1).removesuffix('geolocation-!cn.mrs') + filename
+    return text[:idx] + static_provider_block(service, url) + text[idx:]
 
 
 def static_group_block(service):
@@ -204,6 +217,66 @@ def patch_static():
 
 patch_js()
 patch_static()
+
+
+def verify_service_provider(text, service, is_js):
+    name = service['name']
+    provider = service['provider']
+    filename = service['url'].rsplit('/', 1)[-1]
+    if is_js:
+        begin = text.find("    name: '{name}',".replace('{name}', name))
+        end = text.find("\n  },\n", begin)
+        if begin == -1 or end == -1:
+            raise RuntimeError(f'{name}: service config boundaries missing')
+        segment = text[begin:end]
+        match = re.search(rf"(?ms)^      {re.escape(provider)}: \{{\n(?P<body>.*?)^      \}},\n", segment)
+        expected_type = '...ruleProviderCommonDomain,'
+        expected_bundle = f"'path-in-bundle': 'geo/geosite/{filename}'"
+    else:
+        match = re.search(rf"(?ms)^  {re.escape(provider)}:\n(?P<body>.*?)(?=^  [\w-]+:\n|\Z)", text)
+        expected_type = '<<: *rule_providers_domain'
+        expected_bundle = f"path-in-bundle: 'geo/geosite/{filename}'"
+    if not match:
+        raise RuntimeError(f'{name}: dedicated provider definition missing')
+    body = match.group('body')
+    url_match = re.search(r"(?m)^ +url: (?:'([^']+)'|`([^`]+)`),?\s*$", body)
+    url = next((v for v in url_match.groups() if v), '') if url_match else ''
+    valid_url = (url.startswith('https://') and url.endswith('/geo/geosite/' + filename)) or (
+        url == 'js = FULL_JS.read_text(encoding='utf-8')
+yaml = FULL_STATIC.read_text(encoding='utf-8')
+
+for service in SERVICES:
+    name = service['name']
+    provider = service['provider']
+    if f"name: '{name}'" not in js or f'{name}: true' not in js:
+        raise RuntimeError(f'mihomoScript.js: missing {name} option/group')
+    if f'RULE-SET,{provider},{name}' not in js:
+        raise RuntimeError(f'mihomoScript.js: missing {name} rule')
+    if f"- name: '{name}'" not in yaml or f'RULE-SET,{provider},{name}' not in yaml:
+        raise RuntimeError(f'mihomoConfig.yaml: missing {name} group/rule')
+    verify_service_provider(js, service, is_js=True)
+    verify_service_provider(yaml, service, is_js=False)
+
+if 'RULE-SET,github,默认代理' in js or 'RULE-SET,github,默认代理' in yaml:
+    raise RuntimeError('GitHub is still routed directly to 默认代理')
+
+js_order = [js.index(f"name: '{service['name']}'") for service in SERVICES]
+js_order.extend([js.index("name: 'Google'"), js.index("name: 'AI'")])
+if js_order != sorted(js_order):
+    raise RuntimeError('mihomoScript.js: dedicated service order is incorrect')
+
+yaml_rule_order = [yaml.index(f"RULE-SET,{service['provider']},{service['name']}") for service in SERVICES]
+yaml_rule_order.extend([yaml.index('RULE-SET,google,Google'), yaml.index('RULE-SET,ai,AI')])
+if yaml_rule_order != sorted(yaml_rule_order):
+    raise RuntimeError('mihomoConfig.yaml: dedicated rule order is incorrect')
+
+print('Dedicated Gemini/OpenAI/Anthropic/GitHub groups verified with semantic patches')
+ + '{ruleSetBaseUrl}geosite/' + filename
+    )
+    if not valid_url or not all(x in body for x in (
+        expected_type, f"path: './ruleset/{provider}.mrs'", expected_bundle
+    )):
+        raise RuntimeError(f'{name}: provider URL or path is invalid')
 
 js = FULL_JS.read_text(encoding='utf-8')
 yaml = FULL_STATIC.read_text(encoding='utf-8')
