@@ -12,6 +12,7 @@ on:
       - '.github/scripts/preserve_upstream_compat.py'
       - '.github/scripts/preserve_downstream.py'
       - '.github/scripts/netweave_patch_helpers.py'
+      - 'Test/test_netweave_patches.py'
       - '.github/scripts/preserve_service_groups.py'
 
 permissions:
