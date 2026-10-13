@@ -64,7 +64,7 @@ class NetWeavePatchTests(unittest.TestCase):
     def test_tw_restored_after_full_script_upstream_removal(self):
         original = (ROOT / 'Script' / 'mihomoScript.js').read_text(encoding='utf-8')
         without_tw = re.sub(
-            r"  \{\n    name: '台湾省',\n.*?  \},\n",
+            r"  \{\n    name: '台湾',\n.*?  \},\n",
             '',
             original,
             count=1,
@@ -81,17 +81,52 @@ class NetWeavePatchTests(unittest.TestCase):
                 original = (ROOT / 'Config' / name).read_text(encoding='utf-8')
                 without_tw = re.sub(r'(?m)^  TW_filter:.*\n', '', original, count=1)
                 without_tw = re.sub(
-                    r"(?ms)^  - name: '台湾省'\n.*?(?=  - name: '低倍率节点'\n)",
+                    r"(?ms)^  - name: '台湾'\n.*?(?=  - name: '低倍率节点'\n)",
                     '',
                     without_tw,
                     count=1,
                 )
                 self.assertNotEqual(without_tw, original)
-                without_tw = without_tw.replace("'台湾省',", '')
+                without_tw = without_tw.replace("'台湾',", '')
                 without_tw = without_tw.replace('|' + TW_PATTERN, '')
                 restored = ensure_static_tw(without_tw, Path(name))
                 verify_tw_static(restored, Path(name))
                 self.assertEqual(ensure_static_tw(restored, Path(name)), restored)
+
+    def test_legacy_tw_groups_are_deduplicated(self):
+        for filename in ('mihomoConfig.yaml', 'mihomoConfigLite.yaml'):
+            original = (ROOT / 'Config' / filename).read_text(encoding='utf-8')
+            # Exercise the exact migration from a previous NetWeave build.
+            legacy = (
+                "  - name: '台湾省'\n"
+                "    <<: [*group_common_select, *TW_filter]\n"
+                "    include-all: true\n"
+                "    proxies: ['台湾省-自动选择']\n"
+                "    icon: 'https://example.com/Taiwan.svg'\n"
+                "  - name: '台湾省-自动选择'\n"
+                "    <<: [*group_common_auto, *TW_filter]\n"
+            )
+            fixture = original.replace("  - name: '低倍率节点'\n", legacy + "  - name: '低倍率节点'\n", 1)
+            fixture = fixture.replace("'台湾',", "'台湾省', '台湾',", 1)
+            result = ensure_static_tw(fixture, Path(filename))
+            verify_tw_static(result, Path(filename))
+            self.assertNotIn("  - name: '台湾省'\n", result)
+            self.assertEqual(result, ensure_static_tw(result, Path(filename)))
+
+        js = (ROOT / 'Script' / 'mihomoScript.js').read_text(encoding='utf-8')
+        legacy_js = (
+            "  {\n"
+            "    name: '台湾省',\n"
+            "    flag: '🇹🇼',\n"
+            "    regex: /🇹🇼|台湾|taiwan/i,\n"
+            "    icon: 'https://example.com/Taiwan.svg',\n"
+            "  },\n"
+        )
+        fixture = js.replace("  {\n    name: '台湾',\n", legacy_js + "  {\n    name: '台湾',\n", 1)
+        result = ensure_full_script_tw(fixture, Path('mihomoScript.js'))
+        verify_tw_full_js(result, Path('mihomoScript.js'))
+        self.assertEqual(result, ensure_full_script_tw(result, Path('mihomoScript.js'))
+
 
 
 if __name__ == '__main__':

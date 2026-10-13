@@ -108,10 +108,11 @@ function runIntegrationTests(h, api, meta, fx, loadScript, scriptFile) {
   h.test('全量版台湾地区节点保留独立分组', () => {
     if (!meta.full) return;
     const out = api.main(fx.typicalSubscription());
-    const tw = groupByName(out['proxy-groups'], '台湾省');
+    const tw = groupByName(out['proxy-groups'], '台湾');
     h.assert(tw, 'TW 分组必须存在');
+    h.assert(!groupByName(out['proxy-groups'], '台湾省'), '旧台湾省分组不应再次生成');
     h.assert(
-      out['proxy-groups'].some((g) => g.name === '台湾省-自动选择'),
+      out['proxy-groups'].some((g) => g.name === '台湾-自动选择'),
       'TW 自动选择组必须存在',
     );
     h.assert(

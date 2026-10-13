@@ -3,7 +3,7 @@
 import ast
 import re
 
-TW_REGION = '台湾省'
+TW_REGION = '台湾'
 TW_PATTERN = '🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan'
 TW_DIRECT_ICON = 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Taiwan.svg'
 
@@ -71,16 +71,32 @@ def _insert_region_into_group(text, start_marker, end_marker, label):
     if start == -1 or end == -1:
         raise RuntimeError(f'{label}: group boundaries missing')
     block = text[start:end]
-    if "'台湾省'" in block:
+    if "'台湾'" in block:
         return text
     if "'新加坡'," not in block:
         raise RuntimeError(f'{label}: cannot find Singapore anchor')
-    block = block.replace("'新加坡',", "'新加坡', '台湾省',", 1)
+    block = block.replace("'新加坡',", "'新加坡', '台湾',", 1)
     return text[:start] + block + text[end:]
+
+
+def _remove_legacy_tw(text, path):
+    for name in ('台湾省', '台湾省-自动选择'):
+        marker = f"  - name: '{name}'\n"
+        if text.count(marker) > 1:
+            raise RuntimeError(f'{path}: duplicate legacy group {name}')
+        if marker in text:
+            pos = text.index(marker)
+            following = re.search(r"(?m)^  - name: '[^']+'\n", text[pos + len(marker):])
+            if not following:
+                raise RuntimeError(f'{path}: missing group boundary for {name}')
+            stop = pos + len(marker) + following.start()
+            text = text[:pos] + text[stop:]
+    return text.replace("'台湾省',", '').replace("'台湾省-自动选择',", '')
 
 
 def ensure_static_tw(text, path):
     """Keep TW filter, memberships and both static groups even if upstream deletes them."""
+    text = _remove_legacy_tw(text, path)
     if "  TW_filter:" not in text:
         m = re.search(r'(?m)^  SG_filter:.*\n', text)
         if not m:
@@ -108,8 +124,8 @@ def ensure_static_tw(text, path):
     ]:
         text = _insert_region_into_group(text, start, end, f'{path}: {label}')
 
-    select = "  - name: '台湾省'\n"
-    auto = "  - name: '台湾省-自动选择'\n"
+    select = "  - name: '台湾'\n"
+    auto = "  - name: '台湾-自动选择'\n"
     if (select not in text or auto not in text):
         if select in text or auto in text:
             raise RuntimeError(f'{path}: partial TW group; refusing to guess')
@@ -117,12 +133,12 @@ def ensure_static_tw(text, path):
         if anchor not in text:
             raise RuntimeError(f'{path}: rate group anchor missing for TW restoration')
         group = (
-            "  - name: '台湾省'\n"
+            "  - name: '台湾'\n"
             "    <<: [*group_common_select, *TW_filter]\n"
             "    include-all: true\n"
-            "    proxies: ['台湾省-自动选择']\n"
+            "    proxies: ['台湾-自动选择']\n"
             f"    icon: '{TW_DIRECT_ICON}'\n"
-            "  - name: '台湾省-自动选择'\n"
+            "  - name: '台湾-自动选择'\n"
             "    <<: [*group_common_auto, *TW_filter]\n\n"
         )
         text = text.replace(anchor, group + anchor, 1)
@@ -132,15 +148,22 @@ def ensure_static_tw(text, path):
 def ensure_full_script_tw(text, path):
     if path.name != 'mihomoScript.js':
         return text
+    text, legacy_count = re.subn(
+        r"(?ms)^  \{\n    name: '台湾省',\n.*?^  \},\n",
+        '',
+        text,
+    )
+    if legacy_count > 1:
+        raise RuntimeError(f'{path}: duplicate legacy TW regions')
     start = text.find('const regionDefinitions = [')
     end = text.find('\n];', start)
     if start == -1 or end == -1:
         raise RuntimeError(f'{path}: regionDefinitions boundaries missing')
-    if "name: '台湾省'" in text[start:end]:
+    if "name: '台湾'" in text[start:end]:
         return text
     region = (
         "  {\n"
-        "    name: '台湾省',\n"
+        "    name: '台湾',\n"
         "    flag: '🇹🇼',\n"
         "    regex: /" + TW_PATTERN + "/i,\n"
         "    icon: " + chr(96) + '$' + "{iconBaseUrl}Taiwan.svg" + chr(96) + ",\n"
@@ -150,7 +173,11 @@ def ensure_full_script_tw(text, path):
 
 
 def verify_tw_static(text, path):
-    for value in ('  TW_filter:', "  - name: '台湾省'\n", "  - name: '台湾省-自动选择'\n"):
+    if any(label in text for label in ("  - name: '台湾省'\n", "  - name: '台湾省-自动选择'\n", "'台湾省',")):
+        raise RuntimeError(f'{path}: legacy TW group remains')
+    if text.count("  - name: '台湾'\n") != 1 or text.count("  - name: '台湾-自动选择'\n") != 1:
+        raise RuntimeError(f'{path}: expected exactly one TW group pair')
+    for value in ('  TW_filter:', "  - name: '台湾'\n", "  - name: '台湾-自动选择'\n"):
         if value not in text:
             raise RuntimeError(f'{path}: TW protection missing {value}')
     for start, end in [
@@ -159,14 +186,16 @@ def verify_tw_static(text, path):
         ("  - name: '默认代理'\n", "  - name: '手动选择'\n"),
     ]:
         a, b = text.find(start), text.find(end, text.find(start))
-        if a == -1 or b == -1 or "'台湾省'" not in text[a:b]:
+        if a == -1 or b == -1 or "'台湾'" not in text[a:b]:
             raise RuntimeError(f'{path}: TW missing from an upstream shared group')
 
 
 def verify_tw_full_js(text, path):
+    if "name: '台湾省'" in text:
+        raise RuntimeError(f'{path}: legacy TW region remains')
     start = text.find('const regionDefinitions = [')
     end = text.find('\n];', start)
-    if start == -1 or end == -1 or "name: '台湾省'" not in text[start:end]:
+    if start == -1 or end == -1 or "name: '台湾'" not in text[start:end]:
         raise RuntimeError(f'{path}: TW region missing from full script')
 
 def verify_googlefcm_provider(text, path):
