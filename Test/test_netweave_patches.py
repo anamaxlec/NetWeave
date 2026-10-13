@@ -125,7 +125,7 @@ class NetWeavePatchTests(unittest.TestCase):
         fixture = js.replace("  {\n    name: '台湾',\n", legacy_js + "  {\n    name: '台湾',\n", 1)
         result = ensure_full_script_tw(fixture, Path('mihomoScript.js'))
         verify_tw_full_js(result, Path('mihomoScript.js'))
-        self.assertEqual(result, ensure_full_script_tw(result, Path('mihomoScript.js'))
+        self.assertEqual(result, ensure_full_script_tw(result, Path('mihomoScript.js')))
 
 
 
