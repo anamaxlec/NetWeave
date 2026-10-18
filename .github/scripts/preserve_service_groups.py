@@ -123,6 +123,75 @@ def detach_github_from_microsoft_js(text):
     return text[:start] + block + text[end:]
 
 
+
+def normalize_js_service_order(text):
+    """Put dedicated service groups ahead of generic Google/AI even if upstream adds one."""
+    start = text.find('const serviceConfigs = [')
+    end = text.find('\n];', start)
+    if start == -1 or end == -1:
+        raise RuntimeError('mihomoScript.js: serviceConfigs boundaries missing')
+    section = text[start:end]
+    blocks = []
+    for service in SERVICES:
+        name = service['name']
+        marker = f"  {{\n    name: '{name}',\n"
+        if section.count(marker) != 1:
+            raise RuntimeError(f'mihomoScript.js: expected one {name} group')
+        first = section.index(marker)
+        last = section.find('\n  },\n', first)
+        if last == -1:
+            raise RuntimeError(f'mihomoScript.js: incomplete {name} group')
+        last += len('\n  },\n')
+        blocks.append(section[first:last])
+        section = section[:first] + section[last:]
+
+    anchor = "  {\n    name: 'Google',\n"
+    if section.count(anchor) != 1:
+        raise RuntimeError('mihomoScript.js: generic Google group missing or duplicated')
+    section = section.replace(anchor, ''.join(blocks) + anchor, 1)
+    return text[:start] + section + text[end:]
+
+
+def normalize_static_service_order(text):
+    """Reorder existing dedicated groups and rule lines without overwriting upstream content."""
+    start = text.find('proxy-groups:\n')
+    end = text.find('\nrules:\n', start)
+    if start == -1 or end == -1:
+        raise RuntimeError('mihomoConfig.yaml: proxy group/rule boundaries missing')
+    section = text[start:end]
+    blocks = []
+    for service in SERVICES:
+        name = service['name']
+        marker = f"  - name: '{name}'\n"
+        if section.count(marker) != 1:
+            raise RuntimeError(f'mihomoConfig.yaml: expected one {name} group')
+        first = section.index(marker)
+        next_group = re.search(r"(?m)^  - name: '[^']+'\n", section[first + len(marker):])
+        if not next_group:
+            raise RuntimeError(f'mihomoConfig.yaml: missing group after {name}')
+        last = first + len(marker) + next_group.start()
+        blocks.append(section[first:last])
+        section = section[:first] + section[last:]
+
+    anchor = "  - name: 'Google'\n"
+    if section.count(anchor) != 1:
+        raise RuntimeError('mihomoConfig.yaml: generic Google group missing or duplicated')
+    section = section.replace(anchor, ''.join(blocks) + anchor, 1)
+    text = text[:start] + section + text[end:]
+
+    lines = []
+    for service in SERVICES:
+        rule = f"  - RULE-SET,{service['provider']},{service['name']}\n"
+        if text.count(rule) != 1:
+            raise RuntimeError(f'mihomoConfig.yaml: expected exactly one rule {rule.strip()}')
+        text = text.replace(rule, '', 1)
+        lines.append(rule)
+    anchor_rule = '  - RULE-SET,google,Google\n'
+    if text.count(anchor_rule) != 1:
+        raise RuntimeError('mihomoConfig.yaml: generic Google rule missing or duplicated')
+    return text.replace(anchor_rule, ''.join(lines) + anchor_rule, 1)
+
+
 def patch_js():
     text = FULL_JS.read_text(encoding='utf-8')
     for service in SERVICES:
@@ -131,6 +200,7 @@ def patch_js():
         text = ensure_js_service(text, service)
 
     text = detach_github_from_microsoft_js(text)
+    text = normalize_js_service_order(text)
     FULL_JS.write_text(text, encoding='utf-8')
 
 
@@ -212,6 +282,7 @@ def patch_static():
     for service in SERVICES:
         text = ensure_rule_before_google(text, service)
 
+    text = normalize_static_service_order(text)
     FULL_STATIC.write_text(text, encoding='utf-8')
 
 
