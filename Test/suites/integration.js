@@ -346,8 +346,8 @@ function runIntegrationTests(h, api, meta, fx, loadScript, scriptFile) {
       const groups = out['proxy-groups'];
       h.assertDeep(
         groups.map((g) => g.name),
-        ['GLOBAL', '默认代理', '直连'],
-        '极简模式策略组应仅保留 GLOBAL、默认代理和直连',
+        ['GLOBAL', '默认代理', '自动选择', '直连'],
+        '极简模式策略组应仅保留 GLOBAL、默认代理、自动选择和直连',
       );
       h.assert(!out.dns['fake-ip-filter'].includes('rule-set:googlefcm'), '不应注入 FCM fake-IP 规则');
       h.assert(!out.rules.some((rule) => /,(Google|AI|Telegram|Steam|AdBlock)$/.test(rule)), '不应生成分流规则');
