@@ -1,10 +1,8 @@
 /**
- * NetWeave - mihomo配置覆写脚本（全量版）
- * 维护：anamaxlec
- * 原作者：AIsouler
- * 项目仓库：https://github.com/anamaxlec/NetWeave
- * 脚本链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Script/mihomoScript.js
- * 上游项目：https://github.com/AIsouler/MyClash
+ * mihomo配置覆写脚本（全量版）
+ * 作者：AIsouler
+ * 源仓库：https://github.com/AIsouler/MyClash
+ * 脚本链接：https://raw.githubusercontent.com/AIsouler/MyClash/main/Script/mihomoScript.js
  * 友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
  */
 
@@ -27,9 +25,6 @@ const ruleOptionsEnable = {
   // 以下为分流策略配置
   FCM: true, // GoogleFCM服务
   YouTube: true, // YouTube视频平台
-  Gemini: true, // Google Gemini / AI Studio / NotebookLM 等
-  OpenAI: true, // OpenAI / ChatGPT / Codex
-  Anthropic: true, // Anthropic / Claude
   Google: true, // Google服务
   AI: true, // 国外AI服务
   GitHub: true, // GitHub代码托管平台
@@ -45,6 +40,7 @@ const ruleOptionsEnable = {
   Emby: true, // Emby媒体服务
   PikPak: true, // PikPak网盘服务
   Spotify: true, // Spotify音乐服务
+  Crypto: true, // 加密货币相关服务
   PayPal: true, // PayPal支付服务
   Patreon: true, // Patreon创作者赞助平台
   EHentai: true, // E-Hentai网站
@@ -74,6 +70,7 @@ const prefixRules = [
   'RULE-SET,private,直连',
 
   // 国内直连
+  'RULE-SET,geolocation-cn,直连',
   'RULE-SET,games_cn,直连', // 已包含 steam 下载域名
   'RULE-SET,synology,直连',
   'RULE-SET,nvidia_cn,直连',
@@ -113,26 +110,7 @@ const excludeFilter =
 
 // 屏蔽国外QUIC
 const blockForeignQuic = [
-  'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT',
-];
-
-// FCM real-IP 显式兜底；googlefcm rule-set 负责动态覆盖。
-const fcmRealIpFallback = [
-  'mtalk.google.com',
-  'mtalk4.google.com',
-  'mtalk-dev.google.com',
-  'mtalk-staging.google.com',
-  'alt1-mtalk.google.com',
-  'alt2-mtalk.google.com',
-  'alt3-mtalk.google.com',
-  'alt4-mtalk.google.com',
-  'alt5-mtalk.google.com',
-  'alt6-mtalk.google.com',
-  'alt7-mtalk.google.com',
-  'alt8-mtalk.google.com',
-  'android.apis.google.com',
-  'device-provisioning.googleapis.com',
-  'firebaseinstallations.googleapis.com',
+  'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT',
 ];
 
 // 直连节点
@@ -312,13 +290,6 @@ const baseRuleProviders = {
 
   // --- 代理规则集 ---
 
-  googlefcm: {
-    ...ruleProviderCommonDomain,
-    url: `${ruleSetBaseUrl}geosite/googlefcm.mrs`,
-    path: './ruleset/googlefcm.mrs',
-    'path-in-bundle': 'geo/geosite/googlefcm.mrs',
-  },
-
   'geolocation-!cn': {
     ...ruleProviderCommonDomain,
     url: `${ruleSetBaseUrl}geosite/geolocation-!cn.mrs`,
@@ -419,8 +390,7 @@ const serviceConfigs = [
     name: 'FCM',
     baseOption: selectBaseOption,
     direct: true,
-    preferredDirect: '🇨🇳 直连 | IPv6优先',
-    defaultSelected: '🇨🇳 直连 | IPv6优先',
+    defaultSelected: '直连',
     providers: {
       googlefcm: {
         ...ruleProviderCommonDomain,
@@ -447,65 +417,6 @@ const serviceConfigs = [
     rules: ['RULE-SET,youtube,YouTube'],
   },
   {
-    name: 'Gemini',
-    baseOption: selectBaseOption,
-    defaultSelected: '美国',
-    providers: {
-      google_gemini: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/google-gemini.mrs`,
-        path: './ruleset/google_gemini.mrs',
-        'path-in-bundle': 'geo/geosite/google-gemini.mrs',
-      },
-    },
-    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png',
-    rules: ['RULE-SET,google_gemini,Gemini'],
-  },
-  {
-    name: 'OpenAI',
-    baseOption: selectBaseOption,
-    defaultSelected: '美国',
-    providers: {
-      openai: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/openai.mrs`,
-        path: './ruleset/openai.mrs',
-        'path-in-bundle': 'geo/geosite/openai.mrs',
-      },
-    },
-    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
-    rules: ['RULE-SET,openai,OpenAI'],
-  },
-  {
-    name: 'Anthropic',
-    baseOption: selectBaseOption,
-    defaultSelected: '美国',
-    providers: {
-      anthropic: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/anthropic.mrs`,
-        path: './ruleset/anthropic.mrs',
-        'path-in-bundle': 'geo/geosite/anthropic.mrs',
-      },
-    },
-    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
-    rules: ['RULE-SET,anthropic,Anthropic'],
-  },
-  {
-    name: 'GitHub',
-    baseOption: selectBaseOption,
-    providers: {
-      github: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/github.mrs`,
-        path: './ruleset/github.mrs',
-        'path-in-bundle': 'geo/geosite/github.mrs',
-      },
-    },
-    icon: `${iconBaseUrl}GitHub.svg`,
-    rules: ['RULE-SET,github,GitHub'],
-  },
-  {
     name: 'Google',
     baseOption: selectBaseOption,
     providers: {
@@ -523,7 +434,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Google.svg`,
-    rules: ['RULE-SET,google,Google', 'RULE-SET,google_ip,Google,no-resolve'],
+    rules: ['RULE-SET,google,Google'],
+    ipRules: ['RULE-SET,google_ip,Google'],
   },
   {
     name: 'AI',
@@ -546,6 +458,20 @@ const serviceConfigs = [
     ],
   },
   {
+    name: 'GitHub',
+    baseOption: selectBaseOption,
+    providers: {
+      github: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/github.mrs`,
+        path: './ruleset/github.mrs',
+        'path-in-bundle': 'geo/geosite/github.mrs',
+      },
+    },
+    icon: `${iconBaseUrl}GitHub.svg`,
+    rules: ['RULE-SET,github,GitHub'],
+  },
+  {
     name: 'Microsoft',
     baseOption: selectBaseOption,
     direct: true,
@@ -564,7 +490,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Microsoft.svg`,
-    rules: ['RULE-SET,microsoft,Microsoft', 'RULE-SET,microsoft_ip,Microsoft,no-resolve'],
+    rules: ['RULE-SET,microsoft,Microsoft'],
+    ipRules: ['RULE-SET,microsoft_ip,Microsoft'],
   },
   {
     name: 'Apple',
@@ -585,7 +512,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Apple.svg`,
-    rules: ['RULE-SET,apple,Apple', 'RULE-SET,apple_ip,Apple,no-resolve'],
+    rules: ['RULE-SET,apple,Apple'],
+    ipRules: ['RULE-SET,apple_ip,Apple'],
   },
   {
     name: 'Telegram',
@@ -605,7 +533,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Telegram.svg`,
-    rules: ['RULE-SET,telegram,Telegram', 'RULE-SET,telegram_ip,Telegram,no-resolve'],
+    rules: ['RULE-SET,telegram,Telegram'],
+    ipRules: ['RULE-SET,telegram_ip,Telegram'],
   },
   {
     name: 'Steam',
@@ -626,7 +555,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Steam.svg`,
-    rules: ['RULE-SET,steam,Steam', 'RULE-SET,steam_ip,Steam,no-resolve'],
+    rules: ['RULE-SET,steam,Steam'],
+    ipRules: ['RULE-SET,steam_ip,Steam'],
   },
   {
     name: 'TikTok',
@@ -647,7 +577,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}TikTok.svg`,
-    rules: ['RULE-SET,tiktok,TikTok', 'RULE-SET,tiktok_ip,TikTok,no-resolve'],
+    rules: ['RULE-SET,tiktok,TikTok'],
+    ipRules: ['RULE-SET,tiktok_ip,TikTok'],
   },
   {
     name: 'Twitter',
@@ -667,7 +598,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Twitter.svg`,
-    rules: ['RULE-SET,twitter,Twitter', 'RULE-SET,twitter_ip,Twitter,no-resolve'],
+    rules: ['RULE-SET,twitter,Twitter'],
+    ipRules: ['RULE-SET,twitter_ip,Twitter'],
   },
   {
     name: 'Meta',
@@ -687,7 +619,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Meta.svg`,
-    rules: ['RULE-SET,meta,Meta', 'RULE-SET,facebook_ip,Meta,no-resolve'],
+    rules: ['RULE-SET,meta,Meta'],
+    ipRules: ['RULE-SET,facebook_ip,Meta'],
   },
   {
     name: 'Line',
@@ -721,7 +654,8 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Netflix.svg`,
-    rules: ['RULE-SET,netflix,Netflix', 'RULE-SET,netflix_ip,Netflix,no-resolve'],
+    rules: ['RULE-SET,netflix,Netflix'],
+    ipRules: ['RULE-SET,netflix_ip,Netflix'],
   },
   {
     name: 'Emby',
@@ -791,7 +725,53 @@ const serviceConfigs = [
       },
     },
     icon: `${iconBaseUrl}Spotify.svg`,
-    rules: ['RULE-SET,spotify,Spotify', 'RULE-SET,spotify_ip,Spotify,no-resolve'],
+    rules: ['RULE-SET,spotify,Spotify'],
+    ipRules: ['RULE-SET,spotify_ip,Spotify'],
+  },
+  {
+    name: 'Crypto',
+    baseOption: selectBaseOption,
+    defaultSelected: '日本',
+    providers: {
+      cryptocurrency: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/category-cryptocurrency.mrs`,
+        path: './ruleset/cryptocurrency.mrs',
+        'path-in-bundle': 'geo/geosite/category-cryptocurrency.mrs',
+      },
+    },
+    icon: `${iconBaseUrl}Bitcoin.svg`,
+    rules: ['RULE-SET,cryptocurrency,Crypto'],
+  },
+  {
+    name: 'PayPal',
+    baseOption: selectBaseOption,
+    defaultSelected: '美国',
+    providers: {
+      paypal: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/paypal.mrs`,
+        path: './ruleset/paypal.mrs',
+        'path-in-bundle': 'geo/geosite/paypal.mrs',
+      },
+    },
+    icon: `${iconBaseUrl}PayPal.svg`,
+    rules: ['RULE-SET,paypal,PayPal'],
+  },
+  {
+    name: 'Patreon',
+    baseOption: selectBaseOption,
+    defaultSelected: '香港',
+    providers: {
+      patreon: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/patreon.mrs`,
+        path: './ruleset/patreon.mrs',
+        'path-in-bundle': 'geo/geosite/patreon.mrs',
+      },
+    },
+    icon: `${iconBaseUrl}Patreon.svg`,
+    rules: ['RULE-SET,patreon,Patreon'],
   },
   {
     name: 'EHentai',
@@ -1123,6 +1103,7 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
 
   const functionalGroups = [];
   const functionalRules = [];
+  const functionalIpRules = [];
   const finalRuleProviders = { ...baseRuleProviders };
 
   if (!blockForeignQuicEnabled) {
@@ -1175,6 +1156,7 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
       globalGroup,
       functionalGroups: [defaultGroup, ...(autoSelectGroupEnabled ? [autoSelectGroup] : [])],
       functionalRules: [],
+      functionalIpRules: [],
       finalRuleProviders,
       directGroup,
     };
@@ -1195,6 +1177,7 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
     if (!ruleOptionsEnable[svc.name]) continue;
 
     functionalRules.push(...(svc.rules || []));
+    functionalIpRules.push(...(svc.ipRules || []));
     Object.assign(finalRuleProviders, svc.providers || {});
   }
 
@@ -1217,10 +1200,6 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
             ...allProxiesNames,
             ...(svc.direct ? ['直连'] : []),
           ];
-    }
-
-    if (svc.preferredDirect && !groupProxies.includes(svc.preferredDirect)) {
-      groupProxies.unshift(svc.preferredDirect);
     }
 
     functionalGroups.push({
@@ -1261,7 +1240,7 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
     icon: `${iconBaseUrl}Global.svg`,
   };
 
-  return { globalGroup, functionalGroups, functionalRules, finalRuleProviders, directGroup };
+  return { globalGroup, functionalGroups, functionalRules, functionalIpRules, finalRuleProviders, directGroup };
 }
 
 // ---dns和hosts相关处理---
@@ -1459,10 +1438,8 @@ const commonDnsRegex = new RegExp(
 // 国内外 DNS 定义
 const chinaDNS = ['223.5.5.5#DIRECT', '119.29.29.29#DIRECT'];
 const foreignDNS = ['https://cloudflare-dns.com/dns-query#默认代理', 'https://dns.google/dns-query#默认代理'];
-const defaultDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
-const proxyServerDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
-
-const chinaDohDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
+const defaultDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
+const proxyServerDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://doh.pub/dns-query#DIRECT'];
 
 /**
  * hosts 匹配优先级：精确 > +. > . > *（同级按出现顺序）
@@ -1725,17 +1702,15 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
     'enhanced-mode': 'fake-ip',
     'fake-ip-range': '198.18.0.1/15',
     'fake-ip-range6': '2001:2::1/48',
-    // FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
     'fake-ip-filter': [
       'rule-set:private',
       'rule-set:fakeip_filter',
       'rule-set:geolocation-cn',
-      ...(minimalModeEnabled ? [] : ['rule-set:googlefcm']),
-      ...fcmRealIpFallback,
+      ...(minimalModeEnabled ? [] : ruleOptionsEnable['FCM'] ? ['rule-set:googlefcm'] : []),
       ...proxyFakeIpFilter,
     ],
-    'default-nameserver': chinaDohDNS,
-    'proxy-server-nameserver': chinaDohDNS,
+    'default-nameserver': defaultDNS,
+    'proxy-server-nameserver': proxyServerDNS,
     ...(Object.keys(proxyServerPolicy).length > 0 && {
       'proxy-server-nameserver-policy': proxyServerPolicy,
     }),
@@ -1743,8 +1718,7 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
     'nameserver-policy': {
       'rule-set:private': 'system',
       'rule-set:douyin': ['system', '180.184.1.1', '180.184.2.2'],
-      'rule-set:cn': chinaDohDNS,
-      'rule-set:geolocation-cn': chinaDohDNS,
+      'rule-set:cn': chinaDNS,
     },
     'direct-nameserver': chinaDNS,
     'direct-nameserver-follow-policy': true,
@@ -1786,11 +1760,8 @@ function main(config) {
 
   const generatedRegionGroups = ruleOptionsEnable.极简模式 ? [] : buildRegionGroups(filteredProxies, customProxies);
 
-  const { globalGroup, functionalGroups, functionalRules, finalRuleProviders, directGroup } = buildFunctionalGroups(
-    filteredProxies,
-    generatedRegionGroups,
-    { customProxyNames, customGroup },
-  );
+  const { globalGroup, functionalGroups, functionalRules, functionalIpRules, finalRuleProviders, directGroup } =
+    buildFunctionalGroups(filteredProxies, generatedRegionGroups, { customProxyNames, customGroup });
 
   const { dns, hosts, proxies: mappedProxies } = buildDnsAndHostsConfig(config, filteredProxies);
 
@@ -1848,10 +1819,10 @@ function main(config) {
     ...prefixRules,
     ...(ruleOptionsEnable.屏蔽国外QUIC ? blockForeignQuic : []),
     ...functionalRules,
+    'RULE-SET,geolocation-!cn,默认代理',
+    ...functionalIpRules,
 
     // 兜底规则
-    'RULE-SET,geolocation-!cn,默认代理',
-    'RULE-SET,geolocation-cn,直连',
     'RULE-SET,cn_ip,直连',
     'RULE-SET,private_ip,直连',
     `MATCH,${ruleOptionsEnable.极简模式 ? '默认代理' : '漏网之鱼'}`,
