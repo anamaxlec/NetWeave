@@ -297,7 +297,17 @@ def patch_js_fake_ip_filter(text, path):
         None,
     )
     if geo_index is None:
-        raise RuntimeError(f'{path}: geolocation-cn entry not found in fake-ip-filter')
+        # Upstream migrated the default fake-ip-filter from geolocation-cn to cn.
+        # Preserve the upstream cn entry and also restore our domestic real-IP protection.
+        cn_index = next(
+            (i for i, line in enumerate(filtered_lines) if "'rule-set:cn'" in line),
+            None,
+        )
+        if cn_index is None:
+            raise RuntimeError(f'{path}: both cn and geolocation-cn missing in fake-ip-filter')
+        cn_indent = re.match(r'\s*', filtered_lines[cn_index]).group(0)
+        filtered_lines.insert(cn_index + 1, f"{cn_indent}'rule-set:geolocation-cn',\n")
+        geo_index = cn_index + 1
 
     item_indent = re.match(r'\s*', filtered_lines[geo_index]).group(0)
     if not has_minimal_googlefcm:
