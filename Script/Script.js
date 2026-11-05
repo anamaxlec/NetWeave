@@ -1,10 +1,8 @@
 /**
- * NetWeave - mihomo配置覆写脚本（精简版）
- * 维护：anamaxlec
- * 原作者：AIsouler
- * 项目仓库：https://github.com/anamaxlec/NetWeave
- * 脚本链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Script/Script.js
- * 上游项目：https://github.com/AIsouler/MyClash
+ * mihomo配置覆写脚本（精简版）
+ * 作者：AIsouler
+ * 源仓库：https://github.com/AIsouler/MyClash
+ * 脚本链接：https://raw.githubusercontent.com/AIsouler/MyClash/main/Script/Script.js
  * 友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
  */
 
@@ -40,9 +38,10 @@ const ruleOptionsEnable = {
   过滤低倍率节点: false, // 是否过滤低倍率节点
   过滤高倍率节点: false, // 是否过滤高倍率节点
   过滤非地区节点: true, // 是否过滤非地区节点
-  屏蔽国外QUIC: true, // 是否屏蔽国外QUIC流量
+  屏蔽国外QUIC: false, // 是否屏蔽国外QUIC流量
   代理IPV4优先: false, // 是否将订阅节点统一为 IPv4 优先（与“代理IPV6优先”同时开启时不生效）
   代理IPV6优先: false, // 是否将订阅节点统一为 IPv6 优先（与“代理IPV4优先”同时开启时不生效）
+  链式代理: false, // 是否启用链式代理（自定义节点作为落地节点，经“链式中转”策略组中转）
 };
 
 // 定义前置规则
@@ -54,6 +53,7 @@ const prefixRules = [
   'RULE-SET,private,直连',
 
   // 国内直连
+  'RULE-SET,geolocation-cn,直连',
   'RULE-SET,games_cn,直连', // 已包含 steam 下载域名
   'RULE-SET,synology,直连',
   'RULE-SET,apple_cn,直连',
@@ -86,32 +86,16 @@ const prefixRules = [
 // ];
 const customizeProxies = [];
 
+// 链式代理启用时，自定义节点的 dialer-proxy 引用目标
+const dialerProxyName = '链式中转';
+
 // 定义全局排除节点的正则表达式，用于排除非地区节点
 const excludeFilter =
   /群|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|备用|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|频道|电报|无法|说明|提示|访问|支持|教程|关注|更新|作者|加入|超时|收藏|优惠|福利|邀请|好友|失联|选择|剩余|公益|发布|DIZTNA|通路|登录|禁止|定时|渠道|牢记|永久|余额|阁下|本站|刷新|导航|建议|重置|以下|过滤|⚠️|@|t\.me\/\+|\bexpire\b|\bhttps?:\/\/|\.com|\btraffic\b/iu;
 
 // 屏蔽国外QUIC
 const blockForeignQuic = [
-  'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT',
-];
-
-// FCM real-IP 显式兜底；googlefcm rule-set 负责动态覆盖。
-const fcmRealIpFallback = [
-  'mtalk.google.com',
-  'mtalk4.google.com',
-  'mtalk-dev.google.com',
-  'mtalk-staging.google.com',
-  'alt1-mtalk.google.com',
-  'alt2-mtalk.google.com',
-  'alt3-mtalk.google.com',
-  'alt4-mtalk.google.com',
-  'alt5-mtalk.google.com',
-  'alt6-mtalk.google.com',
-  'alt7-mtalk.google.com',
-  'alt8-mtalk.google.com',
-  'android.apis.google.com',
-  'device-provisioning.googleapis.com',
-  'firebaseinstallations.googleapis.com',
+  'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT',
 ];
 
 // 直连节点
@@ -285,13 +269,6 @@ const baseRuleProviders = {
 
   // --- 代理规则集 ---
 
-  googlefcm: {
-    ...ruleProviderCommonDomain,
-    url: `${ruleSetBaseUrl}geosite/googlefcm.mrs`,
-    path: './ruleset/googlefcm.mrs',
-    'path-in-bundle': 'geo/geosite/googlefcm.mrs',
-  },
-
   'geolocation-!cn': {
     ...ruleProviderCommonDomain,
     url: `${ruleSetBaseUrl}geosite/geolocation-!cn.mrs`,
@@ -306,12 +283,6 @@ const baseRuleProviders = {
     url: `${ruleSetBaseUrl}geosite/fakeip-filter.mrs`,
     path: './ruleset/fakeip-filter.mrs',
     'path-in-bundle': 'geo/geosite/fakeip-filter.mrs',
-  },
-  cn_additional: {
-    ...ruleProviderCommonDomain,
-    url: 'https://static-file-global.353355.xyz/rules/cn-additional-list.mrs',
-    path: './ruleset/cn-additional-list.mrs',
-    'path-in-bundle': 'geo/geosite/cn.mrs',
   },
   cn: {
     ...ruleProviderCommonDomain,
@@ -722,7 +693,12 @@ function buildRegionGroups(filteredProxies, customProxies) {
  * 自定义节点不参与订阅节点过滤，也不参与 hosts 改写及 DNS 域名处理。
  */
 function buildCustomizeGroups(filteredProxies, customizeList = customizeProxies) {
+  const chainEnabled = ruleOptionsEnable.链式代理;
+
   if (!customizeList.length) {
+    if (chainEnabled) {
+      throw new Error('启用失败，请在脚本中添加自定义节点后尝试');
+    }
     return { customProxies: [], customProxyNames: [], customGroup: null };
   }
 
@@ -738,14 +714,18 @@ function buildCustomizeGroups(filteredProxies, customizeList = customizeProxies)
     }
     usedNames.add(name);
 
-    customProxies.push(name === normalized.name ? normalized : { ...normalized, name });
+    let customProxy = name === normalized.name ? normalized : { ...normalized, name };
+    if (chainEnabled && customProxy['dialer-proxy'] !== dialerProxyName) {
+      customProxy = { ...customProxy, 'dialer-proxy': dialerProxyName };
+    }
+    customProxies.push(customProxy);
   }
 
   const customProxyNames = customProxies.map((p) => p.name);
 
   const customGroup = {
     ...selectBaseOption,
-    name: '自建节点',
+    name: chainEnabled ? '链式落地' : '自建节点',
     proxies: customProxyNames,
     icon: `${iconBaseUrl}Server.svg`,
   };
@@ -764,18 +744,14 @@ function buildCustomizeGroups(filteredProxies, customizeList = customizeProxies)
  */
 function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customizeInfo) {
   const minimalModeEnabled = ruleOptionsEnable.极简模式;
-  const blockForeignQuicEnabled = ruleOptionsEnable.屏蔽国外QUIC;
   const addAllNodesToServiceGroupsEnabled = ruleOptionsEnable.分流组添加所有节点;
+  const chainEnabled = ruleOptionsEnable.链式代理;
   const hideManualSelectGroupEnabled = ruleOptionsEnable.隐藏地区手动选择组;
 
   const functionalGroups = [];
   const functionalRules = [];
   const functionalIpRules = [];
   const finalRuleProviders = { ...baseRuleProviders };
-
-  if (!blockForeignQuicEnabled) {
-    delete finalRuleProviders.cn_additional;
-  }
 
   const { customProxyNames = [], customGroup = null } = customizeInfo || {};
   const filteredProxyNames = filteredProxies.map((p) => p.name);
@@ -784,11 +760,20 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
   const baseGroupNames = baseGroups.filter((g) => ruleOptionsEnable[g.name]).map((g) => g.name);
   const customGroupNames = customGroup ? [customGroup.name] : [];
 
+  const chainGroup =
+    chainEnabled && customGroup
+      ? {
+          ...selectBaseOption,
+          name: dialerProxyName,
+          proxies: filteredProxyNames,
+          icon: `${iconBaseUrl}Bypass.svg`,
+        }
+      : null;
+
   if (minimalModeEnabled) {
     const autoSelectGroupEnabled = ruleOptionsEnable.自动选择;
 
     const finalRuleProviders = { ...baseRuleProviders };
-    if (!blockForeignQuicEnabled) delete finalRuleProviders.cn_additional;
 
     const defaultGroup = {
       ...selectBaseOption,
@@ -815,7 +800,13 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
     const globalGroup = {
       ...selectBaseOption,
       name: 'GLOBAL',
-      proxies: ['默认代理', ...customGroupNames, ...(autoSelectGroupEnabled ? [autoSelectGroup.name] : []), '直连'],
+      proxies: [
+        '默认代理',
+        ...customGroupNames,
+        ...(chainGroup ? [chainGroup.name] : []),
+        ...(autoSelectGroupEnabled ? [autoSelectGroup.name] : []),
+        '直连',
+      ],
       icon: `${iconBaseUrl}Global.svg`,
     };
 
@@ -825,6 +816,7 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
       functionalRules: [],
       functionalIpRules: [],
       finalRuleProviders,
+      chainGroup,
       directGroup,
     };
   }
@@ -901,13 +893,22 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
     proxies: [
       ...functionalGroups.map((g) => g.name),
       ...customGroupNames,
+      ...(chainGroup ? [chainGroup.name] : []),
       directGroup.name,
       ...generatedRegionGroups.map((g) => g.name),
     ],
     icon: `${iconBaseUrl}Global.svg`,
   };
 
-  return { globalGroup, functionalGroups, functionalRules, functionalIpRules, finalRuleProviders, directGroup };
+  return {
+    globalGroup,
+    functionalGroups,
+    functionalRules,
+    functionalIpRules,
+    finalRuleProviders,
+    chainGroup,
+    directGroup,
+  };
 }
 
 // ---dns和hosts相关处理---
@@ -1105,10 +1106,8 @@ const commonDnsRegex = new RegExp(
 // 国内外 DNS 定义
 const chinaDNS = ['223.5.5.5#DIRECT', '119.29.29.29#DIRECT'];
 const foreignDNS = ['https://cloudflare-dns.com/dns-query#默认代理', 'https://dns.google/dns-query#默认代理'];
-const defaultDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
-const proxyServerDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
-
-const chinaDohDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
+const defaultDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
+const proxyServerDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://doh.pub/dns-query#DIRECT'];
 
 /**
  * hosts 匹配优先级：精确 > +. > . > *（同级按出现顺序）
@@ -1369,26 +1368,17 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
     'enhanced-mode': 'fake-ip',
     'fake-ip-range': '198.18.0.1/15',
     'fake-ip-range6': '2001:2::1/48',
-    // FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
-    'fake-ip-filter': [
-      'rule-set:private',
-      'rule-set:fakeip_filter',
-      'rule-set:geolocation-cn',
-      ...(ruleOptionsEnable.极简模式 ? [] : ['rule-set:googlefcm']),
-      ...fcmRealIpFallback,
-      ...proxyFakeIpFilter,
-    ],
-    'default-nameserver': chinaDohDNS,
-    'proxy-server-nameserver': chinaDohDNS,
+    'fake-ip-filter': ['rule-set:private', 'rule-set:fakeip_filter', 'rule-set:cn', ...proxyFakeIpFilter],
+    'default-nameserver': defaultDNS,
+    'proxy-server-nameserver': proxyServerDNS,
     ...(Object.keys(proxyServerPolicy).length > 0 && {
       'proxy-server-nameserver-policy': proxyServerPolicy,
     }),
     nameserver: foreignDNS,
     'nameserver-policy': {
       'rule-set:private': 'system',
-      'rule-set:douyin': ['system', '180.184.1.1', '180.184.2.2'],
-      'rule-set:cn': chinaDohDNS,
-      'rule-set:geolocation-cn': chinaDohDNS,
+      'rule-set:douyin': ['180.184.1.1', '180.184.2.2'],
+      'rule-set:cn': chinaDNS,
     },
     'direct-nameserver': chinaDNS,
     'direct-nameserver-follow-policy': true,
@@ -1430,8 +1420,15 @@ function main(config) {
 
   const generatedRegionGroups = ruleOptionsEnable.极简模式 ? [] : buildRegionGroups(filteredProxies, customProxies);
 
-  const { globalGroup, functionalGroups, functionalRules, functionalIpRules, finalRuleProviders, directGroup } =
-    buildFunctionalGroups(filteredProxies, generatedRegionGroups, { customProxyNames, customGroup });
+  const {
+    globalGroup,
+    functionalGroups,
+    functionalRules,
+    functionalIpRules,
+    finalRuleProviders,
+    chainGroup,
+    directGroup,
+  } = buildFunctionalGroups(filteredProxies, generatedRegionGroups, { customProxyNames, customGroup });
 
   const { dns, hosts, proxies: mappedProxies } = buildDnsAndHostsConfig(config, filteredProxies);
 
@@ -1480,6 +1477,7 @@ function main(config) {
     globalGroup,
     ...functionalGroups,
     ...(customGroup ? [customGroup] : []),
+    ...(chainGroup ? [chainGroup] : []),
     directGroup,
     ...generatedRegionGroups,
   ];
@@ -1490,7 +1488,6 @@ function main(config) {
     ...(ruleOptionsEnable.屏蔽国外QUIC ? blockForeignQuic : []),
     ...functionalRules,
     'RULE-SET,geolocation-!cn,默认代理',
-    'RULE-SET,geolocation-cn,直连',
     ...functionalIpRules,
 
     // 兜底规则
