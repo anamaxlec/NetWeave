@@ -314,7 +314,7 @@ def patch_js_fake_ip_filter(text, path):
         if path.name == 'Script.js':
             filtered_lines.insert(
                 geo_index + 1,
-                f"{item_indent}...(ruleOptionsEnable.极简模式 ? [] : ['rule-set:googlefcm']),\n",
+                f"{item_indent}...(ruleOptionsEnable.极简国内外分流模式 ? [] : ['rule-set:googlefcm']),\n",
             )
         else:
             filtered_lines.insert(geo_index + 1, f"{item_indent}'rule-set:googlefcm',\n")

@@ -286,8 +286,10 @@ def ensure_quic_rule(text, path):
 
     lines[index] = "  '" + QUIC_RULE + "',\n"
     text = ''.join(lines)
-    setting = re.findall(r"(?m)^  屏蔽国外QUIC: (true|false),", text)
-    if len(setting) != 1:
-        raise RuntimeError(f'{path}: QUIC option layout changed')
-    return text.replace("  屏蔽国外QUIC: false,", "  屏蔽国外QUIC: true,", 1)
+    toggle_pattern = re.compile(r"(?m)^  (屏蔽国外QUIC|屏蔽代理QUIC流量): (true|false),")
+    toggles = list(toggle_pattern.finditer(text))
+    if len(toggles) != 1:
+        raise RuntimeError(f'{path}: expected exactly one recognized QUIC toggle, got {len(toggles)}')
+    name = toggles[0].group(1)
+    return text.replace(f"  {name}: false,", f"  {name}: true,", 1)
 

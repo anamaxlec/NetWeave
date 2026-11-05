@@ -57,14 +57,15 @@ class NetWeavePatchTests(unittest.TestCase):
                     self.assertEqual(result, ensure_quic_rule(result, path))
 
         for path in (Path('Script/mihomoScript.js'), Path('Script/Script.js')):
-            for rule in (old_rule, upstream_rule, QUIC_RULE):
-                with self.subTest(path=path, rule=rule[:38]):
-                    source = "  屏蔽国外QUIC: false,\n  '" + rule + "',\n"
-                    result = ensure_quic_rule(source, path)
-                    self.assertIn("屏蔽国外QUIC: true", result)
-                    self.assertIn("'" + QUIC_RULE + "'", result)
-                    self.assertNotIn('cn_additional', result)
-                    self.assertEqual(result, ensure_quic_rule(result, path))
+            for toggle in ('屏蔽国外QUIC', '屏蔽代理QUIC流量'):
+                for rule in (old_rule, upstream_rule, QUIC_RULE):
+                    with self.subTest(path=path, toggle=toggle, rule=rule[:38]):
+                        source = f"  {toggle}: false,\n  '" + rule + "',\n"
+                        result = ensure_quic_rule(source, path)
+                        self.assertIn(f"{toggle}: true", result)
+                        self.assertIn("'" + QUIC_RULE + "'", result)
+                        self.assertNotIn('cn_additional', result)
+                        self.assertEqual(result, ensure_quic_rule(result, path))
 
     def test_unknown_quic_semantics_fail_closed(self):
         unexpected = "  # - AND,((NETWORK,UDP),(DST-PORT,443),REJECT)\n"

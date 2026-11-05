@@ -346,7 +346,7 @@ function runIntegrationTests(h, api, fx, loadScript, scriptFile) {
   // ---------------- 配置选项切换 ----------------
   h.section('集成测试 · 配置选项切换');
   h.test('极简模式仅保留基础策略组且 MATCH 走默认代理', () =>
-    withOptions(api, { 极简模式: true }, () => {
+    withOptions(api, { 极简国内外分流模式: true }, () => {
       const out = api.main(fx.typicalSubscription());
       const groups = out['proxy-groups'];
       h.assertDeep(
@@ -378,7 +378,7 @@ function runIntegrationTests(h, api, fx, loadScript, scriptFile) {
     }),
   );
   h.test('生成倍率组=false → 不生成倍率组，节点按地区归类', () =>
-    withOptions(api, { 生成倍率组: false }, () => {
+    withOptions(api, { 生成高低倍率组: false }, () => {
       const out = api.main(fx.typicalSubscription());
       h.assert(!groupByName(out['proxy-groups'], '低倍率节点'), '不应生成低倍率组');
       h.assert(!groupByName(out['proxy-groups'], '高倍率节点'), '不应生成高倍率组');
@@ -429,7 +429,7 @@ function runIntegrationTests(h, api, fx, loadScript, scriptFile) {
     h.assert(quicRule.includes('RULE-SET,cn'), 'QUIC 应采用新的 cn 规则集');
     h.assert(quicRule.includes('RULE-SET,cn_ip,no-resolve'), 'QUIC 应放行国内 IP');
     h.assert(!quicRule.includes('cn_additional'), '不应引用上游已删除的 cn_additional provider');
-    withOptions(api, { 屏蔽国外QUIC: false }, () => {
+    withOptions(api, { 屏蔽代理QUIC流量: false }, () => {
       const out = api.main(fx.minimalSubscription());
       h.assert(!out.rules.some((r) => r.includes('DST-PORT,443') && r.includes('REJECT')), '关闭时不应有 QUIC 拦截');
       h.assert(out['rule-providers'].cn, '关闭拦截不应删除 DNS 所用 cn provider');
