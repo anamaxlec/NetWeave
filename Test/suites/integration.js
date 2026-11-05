@@ -19,9 +19,11 @@ function withOptions(api, patch, fn) {
 
 /**
  * 集成测试：直接调用 main() 对模拟订阅进行覆写并断言输出。
- * meta: { full, regions }
+ * The upstream runner supplies (h, api, fixtures, loadScript, scriptFile).
+ * Derive the full/lite variant from the script path for NetWeave-specific assertions.
  */
-function runIntegrationTests(h, api, meta, fx, loadScript, scriptFile) {
+function runIntegrationTests(h, api, fx, loadScript, scriptFile) {
+  const meta = { full: scriptFile.endsWith('/mihomoScript.js') };
   // ---------------- 节点过滤与标准化 ----------------
   h.section('集成测试 · 节点过滤与标准化');
   h.test('节点过滤与标准化：剔除无效节点、保留有效节点并补国旗', () => {
