@@ -50,13 +50,13 @@ TW 分组是 NetWeave 的长期保留功能：即使上游以后从脚本、静�
 上游主要通过：
 
 ```text
-cn_additional OR cn_ip
+geolocation-cn OR cn OR cn_ip
 ```
 
 判断 UDP/443 是否属于国内流量。本 Fork 调整为：
 
 ```text
-geolocation-cn OR cn_additional OR cn_ip
+geolocation-cn OR geolocation-cn OR cn OR cn_ip
 ```
 
 因此在开启 Bettbox 的「禁用 QUIC / 排除国内」后：

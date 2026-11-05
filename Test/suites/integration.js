@@ -414,15 +414,20 @@ function runIntegrationTests(h, api, meta, fx, loadScript, scriptFile) {
       h.assert(groupByName(out['proxy-groups'], 'AI').proxies.includes('🇭🇰 香港 A'), 'AI 组应含全部节点');
     }),
   );
-  h.test('屏蔽国外QUIC 开关：true 生成 / false 移除 QUIC 规则与 cn_additional', () => {
-    // true（默认）→ 生成 cn_additional 规则集
-    h.assert(api.main(fx.minimalSubscription())['rule-providers'].cn_additional, 'cn_additional 规则集应生成');
-    // false → 移除 QUIC 规则与 cn_additional，cn 规则集保留
+  h.test('屏蔽国外QUIC 开关：启用时保护国内 IPv4/IPv6 流量，禁用时不拦截 UDP/443', () => {
+    const enabled = api.main(fx.minimalSubscription());
+    h.assert(enabled['rule-providers'].cn, 'cn 规则集应存在');
+    h.assert(enabled['rule-providers']['geolocation-cn'], 'geolocation-cn 规则集应存在');
+    const quicRule = enabled.rules.find((r) => r.includes('DST-PORT,443') && r.includes('REJECT'));
+    h.assert(quicRule, '默认应启用国外 QUIC 拦截');
+    h.assert(quicRule.includes('RULE-SET,geolocation-cn'), 'QUIC 应保护国内 geolocation-cn 流量');
+    h.assert(quicRule.includes('RULE-SET,cn'), 'QUIC 应采用新的 cn 规则集');
+    h.assert(quicRule.includes('RULE-SET,cn_ip,no-resolve'), 'QUIC 应放行国内 IP');
+    h.assert(!quicRule.includes('cn_additional'), '不应引用上游已删除的 cn_additional provider');
     withOptions(api, { 屏蔽国外QUIC: false }, () => {
       const out = api.main(fx.minimalSubscription());
-      h.assert(!out.rules.some((r) => r.includes('DST-PORT,443') && r.includes('REJECT')), '不应含 QUIC 规则');
-      h.assert(!out['rule-providers'].cn_additional, 'cn_additional 规则集不应生成');
-      h.assert(out['rule-providers'].cn, 'cn 规则集仍应生成（供 nameserver-policy 使用）');
+      h.assert(!out.rules.some((r) => r.includes('DST-PORT,443') && r.includes('REJECT')), '关闭时不应有 QUIC 拦截');
+      h.assert(out['rule-providers'].cn, '关闭拦截不应删除 DNS 所用 cn provider');
     });
   });
   h.test('关闭 AI 分流组 → 移除组/规则/规则集', () =>

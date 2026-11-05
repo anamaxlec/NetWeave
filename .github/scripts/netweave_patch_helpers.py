@@ -238,3 +238,56 @@ def verify_googlefcm_provider(text, path):
 
     if not valid_url or not all(field in block for field in required):
         raise RuntimeError(f'{path}: googlefcm provider has unexpected URL, behavior or bundle path')
+
+
+# Keep the familiar NetWeave QUIC policy while accepting upstream rule-set migrations.
+# The two current country-domain providers are "cn" and "geolocation-cn".
+QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
+KNOWN_UPSTREAM_QUIC_RULES = {
+    QUIC_RULE,
+    "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT",
+    "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT",
+    "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT",
+}
+
+
+def ensure_quic_rule(text, path):
+    """Normalize exactly one known QUIC rule, including commented upstream YAML.
+
+    Prefer explicit failure for unknown QUIC semantics over silently replacing
+    a new upstream policy with a stale, possibly invalid rule-set reference.
+    """
+    lines = text.splitlines(keepends=True)
+    candidates = []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if "AND,((NETWORK,UDP),(DST-PORT,443)" not in stripped:
+            continue
+        if path.suffix == ".yaml":
+            raw = stripped.removeprefix("#").strip().removeprefix("-").strip()
+        else:
+            raw = stripped.rstrip(",").strip("'").strip('"')
+        candidates.append((index, raw))
+
+    if len(candidates) != 1:
+        raise RuntimeError(f'{path}: expected one QUIC rule, got {len(candidates)}')
+    index, upstream_rule = candidates[0]
+    if upstream_rule not in KNOWN_UPSTREAM_QUIC_RULES:
+        raise RuntimeError(f'{path}: upstream QUIC policy changed unexpectedly')
+
+    if path.suffix == ".yaml":
+        lines[index] = "  - " + QUIC_RULE + "\n"
+        text = ''.join(lines)
+        text = text.replace(
+            "# 禁用国外 QUIC 流量（默认不启用，如果想启用请删除前面的#号注释）",
+            "# 禁用国外 QUIC 流量（NetWeave 默认启用；国内域名与 IP 放行）",
+        )
+        return text
+
+    lines[index] = "  '" + QUIC_RULE + "',\n"
+    text = ''.join(lines)
+    setting = re.findall(r"(?m)^  屏蔽国外QUIC: (true|false),", text)
+    if len(setting) != 1:
+        raise RuntimeError(f'{path}: QUIC option layout changed')
+    return text.replace("  屏蔽国外QUIC: false,", "  屏蔽国外QUIC: true,", 1)
+

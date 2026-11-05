@@ -7,6 +7,8 @@ from netweave_patch_helpers import (
     parse_string_list_field,
     verify_tw_full_js,
     verify_tw_static,
+    ensure_quic_rule,
+    QUIC_RULE,
     verify_googlefcm_provider,
 )
 
@@ -38,8 +40,6 @@ JS_FILES = [
 ]
 
 GOOGLEFCM_RULESET = 'rule-set:googlefcm'
-QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
-OLD_QUIC_RULE = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
 FAKE_IP_COMMENT = '// FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底'
 FCM_IPV6_PREFER_DIRECT = '🇨🇳 直连 | IPv6优先'
 
@@ -499,10 +499,7 @@ def patch_static(path):
             1,
         )
 
-    if QUIC_RULE not in text:
-        if OLD_QUIC_RULE not in text:
-            raise RuntimeError(f'{path}: QUIC rule not found')
-        text = text.replace(OLD_QUIC_RULE, QUIC_RULE, 1)
+    text = ensure_quic_rule(text, path)
 
     path.write_text(text, encoding='utf-8')
 
@@ -545,10 +542,7 @@ def patch_js(path):
             1,
         )
 
-    if QUIC_RULE not in text:
-        if OLD_QUIC_RULE not in text:
-            raise RuntimeError(f'{path}: QUIC rule not found')
-        text = text.replace(OLD_QUIC_RULE, QUIC_RULE, 1)
+    text = ensure_quic_rule(text, path)
 
     path.write_text(text, encoding='utf-8')
 

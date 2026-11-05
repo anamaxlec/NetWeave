@@ -14,6 +14,8 @@ from netweave_patch_helpers import (  # noqa: E402
     verify_tw_full_js,
     verify_tw_static,
     verify_googlefcm_provider,
+    ensure_quic_rule,
+    QUIC_RULE,
 )
 
 
@@ -41,6 +43,33 @@ class NetWeavePatchTests(unittest.TestCase):
                 js.replace("path: './ruleset/googlefcm.mrs'", "path: './ruleset/youtube.mrs'"),
                 Path('Script/Script.js'),
             )
+
+    def test_quic_upstream_switches_to_cn_and_comments_rule(self):
+        old_rule = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
+        upstream_rule = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT"
+
+        for path in (Path('Config/mihomoConfig.yaml'), Path('Config/mihomoConfigLite.yaml')):
+            for old_line in (f"  - {old_rule}\n", f"  # - {upstream_rule}\n", f"  - {QUIC_RULE}\n"):
+                with self.subTest(path=path, original=old_line.strip()[:38]):
+                    result = ensure_quic_rule("rules:\n" + old_line, path)
+                    self.assertIn("  - " + QUIC_RULE + "\n", result)
+                    self.assertNotIn('cn_additional', result)
+                    self.assertEqual(result, ensure_quic_rule(result, path))
+
+        for path in (Path('Script/mihomoScript.js'), Path('Script/Script.js')):
+            for rule in (old_rule, upstream_rule, QUIC_RULE):
+                with self.subTest(path=path, rule=rule[:38]):
+                    source = "  屏蔽国外QUIC: false,\n  '" + rule + "',\n"
+                    result = ensure_quic_rule(source, path)
+                    self.assertIn("屏蔽国外QUIC: true", result)
+                    self.assertIn("'" + QUIC_RULE + "'", result)
+                    self.assertNotIn('cn_additional', result)
+                    self.assertEqual(result, ensure_quic_rule(result, path))
+
+    def test_unknown_quic_semantics_fail_closed(self):
+        unexpected = "  # - AND,((NETWORK,UDP),(DST-PORT,443),REJECT)\n"
+        with self.assertRaises(RuntimeError):
+            ensure_quic_rule(unexpected, Path('Config/mihomoConfig.yaml'))
 
     def test_only_fake_ip_entries_are_extracted(self):
         src = (
