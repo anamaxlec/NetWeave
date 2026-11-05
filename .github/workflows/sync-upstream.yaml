@@ -66,6 +66,15 @@ jobs:
                 # AGENT 与图标资源完全跟随上游；NetWeave 不在这些文件维护 downstream 差异。
                 git checkout --theirs -- "$file"
                 ;;
+              Test/README.md)
+                # 测试文档跟随上游；本仓库的专属说明仍放在根 README。
+                git checkout --theirs -- "$file"
+                ;;
+              Test/suites/integration.js)
+                # 已包含 NetWeave 的回归断言；遇到冲突时保留本地测试，
+                # 避免上游移除/改写这些保护条件。其他上游测试文件仍正常合并。
+                git checkout --ours -- "$file"
+                ;;
               Config/mihomoConfig.yaml|Config/mihomoConfigLite.yaml|Script/Script.js|Script/mihomoScript.js)
                 # 核心文件先采用上游最新结构，再统一重放 NetWeave 的最小语义 patch。
                 git checkout --theirs -- "$file"
