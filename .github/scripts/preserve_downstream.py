@@ -437,13 +437,17 @@ def ensure_js_fcm_ipv6_prefer(text, path):
         "      groupProxies.unshift(svc.preferredDirect);\n"
         "    }\n\n"
     )
-    if preferred_block not in loop:
-        marker = '    functionalGroups.push({\n'
-        pos = loop.find(marker)
-        if pos == -1:
-            raise RuntimeError(f'{path}: service group push marker not found')
-        loop = loop[:pos] + preferred_block + loop[pos:]
-        text = text[:loop_start] + loop + text[loop_end:]
+    # Upstream now computes "selected" before pushing the group. Insert the
+    # preferred direct proxy before that check, not merely before push.
+    loop = loop.replace(preferred_block, '', 1)
+    selected_marker = '    const selected =\n'
+    push_marker = '    functionalGroups.push({\n'
+    marker = selected_marker if selected_marker in loop else push_marker
+    if loop.count(marker) != 1:
+        raise RuntimeError(f'{path}: FCM selection/push anchor changed')
+    pos = loop.find(marker)
+    loop = loop[:pos] + preferred_block + loop[pos:]
+    text = text[:loop_start] + loop + text[loop_end:]
 
     return text
 
