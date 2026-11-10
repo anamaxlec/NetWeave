@@ -192,6 +192,19 @@ JS 语法 / whitespace 校验
 >
 > 如果机场使用私有 DNS / hosts，请不要再叠加代理客户端自身的 DNS 覆写，以免与脚本生成的 DNS 配置冲突。
 
+### 优先机场 DNS（可选）
+
+覆写脚本新增 Bettbox 开关 `优先机场DNS`，**默认关闭**。为百变小樱等使用私有 DNS／节点入口调度的中转机场设计：
+
+- 开启后，优先将机场订阅中的 `proxy-server-nameserver-policy`、适用于节点域名的 `nameserver-policy` 保留到生成配置的节点 DNS 策略。
+- 对没有专属策略的节点，优先使用机场原始 `proxy-server-nameserver`；如果机场没下发该字段，则使用其 `nameserver`。保留原始 DNS 地址及 `#DIRECT`、`#RULES`、ECS 等参数，不再因筛选公共 DNS 而丢失节点解析入口。
+- 机场提供的节点 `hosts` 映射可在开启后直接写入节点的 `server`；对原有指向本地 DNS 监听的占位解析器，继续避免将其当作实际远程 DNS。
+- 普通网站 `nameserver`、国内 DoH、FCM real-IP 保护和全局分流规则不变。关闭时沿用 NetWeave 既有 DNS 合并行为。
+
+**前提**：机场订阅本身要包含专用 DNS、域名策略或 hosts 映射；脚本不会猜测百变小樱的私有 DNS 地址，也不能保证选中专线入口。此模式优先保留机场的 `#` 出口参数，若机场使用了覆写后不再存在的旧策略组名称，需要对该名称单独做兼容。
+
+使用 Bettbox 时仍应关闭**客户端额外的 DNS 覆写**，让覆写脚本产生的节点解析策略实际生效。静态 YAML 由于没有原始机场订阅的动态 DNS 数据，不受此开关控制。
+
 ### 全量版
 
 [mihomoScript.js](/Script/mihomoScript.js)

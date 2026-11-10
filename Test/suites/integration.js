@@ -179,6 +179,63 @@ function runIntegrationTests(h, api, fx, loadScript, scriptFile) {
 
   // ---------------- DNS 与 hosts ----------------
   h.section('集成测试 · DNS 与 hosts');
+  h.test('机场 DNS 优先：节点专属解析策略优先，未指定的节点回退机场 DNS，普通网站 DoH 不变', () =>
+    withOptions(api, { 优先机场DNS: true }, () => {
+      const cfg = fx.minimalSubscription();
+      cfg.dns = {
+        nameserver: ['https://airport-default.example/dns-query#DIRECT'],
+        'proxy-server-nameserver': ['https://airport-entry.example/dns-query#DIRECT'],
+        'nameserver-policy': {
+          'b.example.com': 'https://airport-b.example/dns-query#DIRECT',
+          'unrelated.example': 'https://unrelated.example/dns-query',
+        },
+        'proxy-server-nameserver-policy': {
+          'a.example.com': ['https://airport-a.example/dns-query#DIRECT'],
+        },
+      };
+      const out = api.main(cfg);
+      const policy = out.dns['proxy-server-nameserver-policy'];
+      h.assertDeep(policy['a.example.com'], ['https://airport-a.example/dns-query#DIRECT']);
+      h.assertEqual(policy['b.example.com'], 'https://airport-b.example/dns-query#DIRECT');
+      h.assertDeep(policy['c.example.com'], ['https://airport-entry.example/dns-query#DIRECT']);
+      h.assert(!('unrelated.example' in policy), '不得将无关域名的 DNS 策略复制进节点解析');
+      h.assertDeep(out.dns.nameserver, [
+        'https://cloudflare-dns.com/dns-query#默认代理',
+        'https://dns.google/dns-query#默认代理',
+      ]);
+      h.assertDeep(out.dns['default-nameserver'], [
+        'https://223.5.5.5/dns-query#DIRECT',
+        'https://1.12.12.12/dns-query#DIRECT',
+      ]);
+    }),
+  );
+
+  h.test('机场 DNS 优先：缺少专用节点 DNS 时使用原始 nameserver，完全无订阅 DNS 时保持默认', () =>
+    withOptions(api, { 优先机场DNS: true }, () => {
+      const cfg = fx.minimalSubscription();
+      cfg.dns = { nameserver: ['https://private-airport.example/dns-query#DIRECT'] };
+      const out = api.main(cfg);
+      h.assertDeep(out.dns['proxy-server-nameserver-policy']['a.example.com'], [
+        'https://private-airport.example/dns-query#DIRECT',
+      ]);
+      const empty = api.main(fx.minimalSubscription());
+      h.assert(!empty.dns['proxy-server-nameserver-policy'], '没有机场 DNS 时应继续使用原有 DoH');
+    }),
+  );
+
+  h.test('机场 DNS 优先：保留机场 hosts 映射，开关关闭时不改变原始 hosts 行为', () => {
+    const cfg = fx.minimalSubscription();
+    cfg.hosts = { 'a.example.com': ['203.0.113.16'] };
+    cfg.dns = { nameserver: ['https://private-airport.example/dns-query#DIRECT'] };
+    const standard = api.main(cfg);
+    h.assertEqual(standard.proxies.find((p) => p.name === '🇭🇰 香港 A').server, 'a.example.com');
+    withOptions(api, { 优先机场DNS: true }, () => {
+      const out = api.main(cfg);
+      h.assertEqual(out.proxies.find((p) => p.name === '🇭🇰 香港 A').server, '203.0.113.16');
+      h.assert(!('a.example.com' in (out.dns['proxy-server-nameserver-policy'] || {})));
+    });
+  });
+
   h.test('默认与代理服务器 DNS 使用各自的固定公共 DNS；无专属策略时私有 DNS 合并写入节点域名 policy', () => {
     const cfg = fx.typicalSubscription();
     // 移除 listen 触发条件与节点专属 DNS 策略，验证私有 DNS 经 policy 生效

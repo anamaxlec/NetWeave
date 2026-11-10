@@ -52,6 +52,7 @@ const ruleOptionsEnable = {
   AdBlock: true, // 广告拦截
 
   // 以下为非分流策略配置
+  优先机场DNS: false, // 优先使用订阅原始 DNS 解析代理节点
   极简国内外分流模式: false, // 是否启用极简国内外分流模式
   生成地区自动选择组: true, // 是否生成地区自动选择策略组
   隐藏地区手动选择组: false, // 是否隐藏地区手动选择策略组
@@ -1789,6 +1790,49 @@ function simplifyDomainPolicy(policy) {
 }
 
 /**
+ * 机场 DNS 兼容：只为订阅节点的域名保留机场原始解析器。
+ * proxy-server-nameserver-policy 允许按节点域名指定入口；不覆盖普通网站 DNS。
+ * DNS 连接参数（#DIRECT / #RULES / #ecs 等）保留原样。
+ */
+function buildAirportNodeDnsPolicy(originalDnsConfig, proxyDomains, shouldRewriteByHosts) {
+  const policy = {};
+  const matchProxyDomain = createDomainMatcher(proxyDomains);
+  const originalPolicy = {
+    ...originalDnsConfig['nameserver-policy'],
+    ...originalDnsConfig['proxy-server-nameserver-policy'],
+  };
+
+  for (const [pattern, source] of Object.entries(originalPolicy)) {
+    if (!matchProxyDomain(pattern)) continue;
+    if (typeof source === 'string' && source.trim()) {
+      policy[pattern] = source;
+    } else if (Array.isArray(source)) {
+      const entries = source.filter((dns) => typeof dns === 'string' && dns.trim());
+      if (entries.length) policy[pattern] = entries;
+    }
+  }
+
+  const dnsList = (source) => {
+    const values = Array.isArray(source) ? source : typeof source === 'string' ? [source] : [];
+    return values.filter((dns) => typeof dns === 'string' && dns.trim());
+  };
+
+  // 如果机场使用指向本地 DNS listen 的占位解析器并已映射 hosts，
+  // 不要再次把该占位地址当成实际的节点 DNS。
+  const proxyDNS = shouldRewriteByHosts ? [] : dnsList(originalDnsConfig['proxy-server-nameserver']);
+  const fallback = proxyDNS.length ? proxyDNS : dnsList(originalDnsConfig.nameserver);
+  const patterns = Object.keys(policy);
+  if (fallback.length) {
+    for (const domain of proxyDomains) {
+      const matchesDomain = createDomainMatcher(new Set([domain]));
+      if (patterns.some((pattern) => matchesDomain(pattern))) continue;
+      policy[domain] = [...fallback];
+    }
+  }
+  return policy;
+}
+
+/**
  * 构建 DNS 与 hosts：保留私有 DNS、节点域名 policy/fake-ip-filter，并按 hosts 改写节点 server
  * hosts改写条件（满足任意一个条件即可）：
  * 1. proxy-server-nameserver 有且仅有一个 DNS 并且该 DNS 包含非空的 listen 值
@@ -1810,7 +1854,10 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
       (listenValue.includes('0.0.0.0') &&
         proxyServerNameservers.some((dns) => String(dns).toLowerCase().includes('127.0.0.1'))));
 
-  const mappedProxies = shouldRewriteByHosts ? applyHostsToProxies(filteredProxies, config.hosts) : filteredProxies;
+  const mappedProxies =
+    shouldRewriteByHosts || ruleOptionsEnable.优先机场DNS
+      ? applyHostsToProxies(filteredProxies, config.hosts)
+      : filteredProxies;
 
   const proxyDomains = new Set(
     mappedProxies
@@ -1864,6 +1911,10 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
       ? simplifyDomainPolicy(matchedProxyPolicy)
       : matchedProxyPolicy;
 
+  const effectiveProxyServerPolicy = ruleOptionsEnable.优先机场DNS
+    ? buildAirportNodeDnsPolicy(originalDnsConfig, proxyDomains, shouldRewriteByHosts)
+    : proxyServerPolicy;
+
   const originalFakeIpFilter = originalDnsConfig['fake-ip-filter'] || [];
   const proxyFakeIpFilter = originalFakeIpFilter.filter((pattern) => matchProxyDomain(pattern));
 
@@ -1888,8 +1939,8 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
     ],
     'default-nameserver': chinaDohDNS,
     'proxy-server-nameserver': chinaDohDNS,
-    ...(Object.keys(proxyServerPolicy).length > 0 && {
-      'proxy-server-nameserver-policy': proxyServerPolicy,
+    ...(Object.keys(effectiveProxyServerPolicy).length > 0 && {
+      'proxy-server-nameserver-policy': effectiveProxyServerPolicy,
     }),
     nameserver: foreignDNS,
     'nameserver-policy': {
