@@ -24,6 +24,7 @@ const ruleOptionsEnable = {
   自动选择: true, // 是否启用自动选择策略组
 
   // 以下为分流策略配置
+  BT: true, // BT / DHT 下载流量（默认直连）
   Google: true, // Google服务
   AI: true, // 国外AI服务
   Telegram: true, // Telegram通讯软件
@@ -367,6 +368,29 @@ const baseGroups = [
 // 定义分流策略组配置
 const serviceConfigs = [
   ...baseGroups,
+  {
+    name: 'BT',
+    baseOption: selectBaseOption,
+    direct: true,
+    defaultSelected: '直连',
+    rules: [
+      'DOMAIN,dht.transmissionbt.com,BT',
+      'DOMAIN,router.bittorrent.com,BT',
+      'DOMAIN,router.utorrent.com,BT',
+      'DOMAIN,dht.libtorrent.org,BT',
+      'PROCESS-NAME,Transmission,BT',
+      'PROCESS-NAME,transmission-daemon,BT',
+      'PROCESS-NAME,transmission-qt,BT',
+      'PROCESS-NAME,transmission-qt.exe,BT',
+      'PROCESS-NAME,qbittorrent,BT',
+      'PROCESS-NAME,qBittorrent,BT',
+      'PROCESS-NAME,qbittorrent.exe,BT',
+      'PROCESS-NAME,qbittorrent-nox,BT',
+      'PROCESS-NAME,BitTorrent.exe,BT',
+      'PROCESS-NAME,org.proninyaroslav.libretorrent,BT',
+      'PROCESS-NAME,com.delphicoder.flud,BT',
+    ],
+  },
   {
     name: 'Google',
     baseOption: selectBaseOption,

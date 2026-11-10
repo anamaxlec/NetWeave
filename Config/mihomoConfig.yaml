@@ -590,6 +590,10 @@ proxy-groups:
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/GitHub.svg'
 
+  - name: 'BT'
+    <<: [*group_common_select, *proxies_direct]
+    default-selected: '直连'
+
   - name: 'Google'
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Google.svg'
@@ -758,6 +762,23 @@ rules:
 
   # 禁用国外 QUIC 流量（NetWeave 默认启用；国内域名与 IP 放行）
   - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT
+
+  # BT / DHT 下载（默认直连；进程识别取决于内核环境）
+  - DOMAIN,dht.transmissionbt.com,BT
+  - DOMAIN,router.bittorrent.com,BT
+  - DOMAIN,router.utorrent.com,BT
+  - DOMAIN,dht.libtorrent.org,BT
+  - PROCESS-NAME,Transmission,BT
+  - PROCESS-NAME,transmission-daemon,BT
+  - PROCESS-NAME,transmission-qt,BT
+  - PROCESS-NAME,transmission-qt.exe,BT
+  - PROCESS-NAME,qbittorrent,BT
+  - PROCESS-NAME,qBittorrent,BT
+  - PROCESS-NAME,qbittorrent.exe,BT
+  - PROCESS-NAME,qbittorrent-nox,BT
+  - PROCESS-NAME,BitTorrent.exe,BT
+  - PROCESS-NAME,org.proninyaroslav.libretorrent,BT
+  - PROCESS-NAME,com.delphicoder.flud,BT
 
   # 广告拦截
   - RULE-SET,category-ads,AdBlock

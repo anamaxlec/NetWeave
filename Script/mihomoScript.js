@@ -25,6 +25,7 @@ const ruleOptionsEnable = {
   负载均衡: true, // 是否启用负载均衡策略组
 
   // 以下为分流策略配置
+  BT: true, // BT / DHT 下载流量（默认直连）
   FCM: true, // GoogleFCM服务
   YouTube: true, // YouTube视频平台
   Gemini: true, // Google Gemini / AI Studio / NotebookLM 等
@@ -410,6 +411,29 @@ const baseGroups = [
 // 定义分流策略组配置
 const serviceConfigs = [
   ...baseGroups,
+  {
+    name: 'BT',
+    baseOption: selectBaseOption,
+    direct: true,
+    defaultSelected: '直连',
+    rules: [
+      'DOMAIN,dht.transmissionbt.com,BT',
+      'DOMAIN,router.bittorrent.com,BT',
+      'DOMAIN,router.utorrent.com,BT',
+      'DOMAIN,dht.libtorrent.org,BT',
+      'PROCESS-NAME,Transmission,BT',
+      'PROCESS-NAME,transmission-daemon,BT',
+      'PROCESS-NAME,transmission-qt,BT',
+      'PROCESS-NAME,transmission-qt.exe,BT',
+      'PROCESS-NAME,qbittorrent,BT',
+      'PROCESS-NAME,qBittorrent,BT',
+      'PROCESS-NAME,qbittorrent.exe,BT',
+      'PROCESS-NAME,qbittorrent-nox,BT',
+      'PROCESS-NAME,BitTorrent.exe,BT',
+      'PROCESS-NAME,org.proninyaroslav.libretorrent,BT',
+      'PROCESS-NAME,com.delphicoder.flud,BT',
+    ],
+  },
   {
     name: 'FCM',
     baseOption: selectBaseOption,

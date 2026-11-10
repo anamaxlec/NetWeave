@@ -117,6 +117,12 @@ Cloudflare DoH / Google DoH
 
 `Crypto` / `cryptocurrency` 分流则从 NetWeave 全量版中移除。
 
+### BT / DHT 下载分流
+
+全量版和精简版均添加 `BT` 策略组，默认走 `直连`，也可在客户端手动切换出口。
+
+规则覆盖 `dht.transmissionbt.com` 等常用 DHT 引导节点，以及 Transmission、qBittorrent 等常见客户端进程。DHT 引导完成后，实际 Peer 通常通过 IP 连接；只有 Mihomo 能获取进程或 Android 包名时，`PROCESS-NAME` 才能将这些连接归入 BT 组。进程信息不可用的环境仍可能按普通规则代理。这里不会把所有 UDP 流量一律直连。
+
 ### 5. 自动同步上游并保护本地优化
 
 仓库包含 `Sync upstream` GitHub Action，每天自动拉取：

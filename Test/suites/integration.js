@@ -108,6 +108,36 @@ function runIntegrationTests(h, api, fx, loadScript, scriptFile) {
 
   // ---------------- NetWeave downstream regressions ----------------
   h.section('集成测试 · NetWeave 下游保护');
+  h.test('BT 独立分组默认直连，DHT 域名和客户端 Peer 连接优先于国外流量兜底', () => {
+    const out = api.main(fx.minimalSubscription());
+    const bt = groupByName(out['proxy-groups'], 'BT');
+    h.assert(bt, 'BT 分组必须存在');
+    h.assertEqual(bt['default-selected'], '直连');
+    h.assert(bt.proxies.includes('直连'), 'BT 必须有直连出口');
+    for (const rule of [
+      'DOMAIN,dht.transmissionbt.com,BT',
+      'DOMAIN,router.bittorrent.com,BT',
+      'DOMAIN,router.utorrent.com,BT',
+      'DOMAIN,dht.libtorrent.org,BT',
+      'PROCESS-NAME,Transmission,BT',
+      'PROCESS-NAME,qbittorrent,BT',
+      'PROCESS-NAME,qbittorrent.exe,BT',
+      'PROCESS-NAME,qbittorrent-nox,BT',
+      'PROCESS-NAME,org.proninyaroslav.libretorrent,BT',
+    ]) {
+      h.assert(out.rules.includes(rule), `BT 规则缺失: ${rule}`);
+    }
+    h.assert(
+      out.rules.indexOf('DOMAIN,dht.transmissionbt.com,BT') < out.rules.indexOf('RULE-SET,geolocation-!cn,默认代理'),
+      'BT 规则必须优先于国外流量兜底',
+    );
+    withOptions(api, { BT: false }, () => {
+      const disabled = api.main(fx.minimalSubscription());
+      h.assert(!groupByName(disabled['proxy-groups'], 'BT'), '禁用 BT 后不得残留分组');
+      h.assert(!disabled.rules.some((rule) => rule.endsWith(',BT')), '禁用 BT 后不得残留规则');
+    });
+  });
+
   h.test('FCM real-IP 保护在常规模式保留，极简模式无独立 FCM 分流', () => {
     const out = api.main(fx.typicalSubscription());
     h.assert(out['rule-providers'].googlefcm, 'googlefcm provider 必须存在');
