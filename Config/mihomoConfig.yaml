@@ -1,8 +1,10 @@
 #  ---------说明---------
-#  mihomo配置（全量版）
-#  作者：AIsouler
-#  原仓库：https://github.com/AIsouler/MyClash
-#  配置链接：https://raw.githubusercontent.com/AIsouler/MyClash/main/Config/mihomoConfig.yaml
+#  NetWeave - mihomo配置（全量版）
+#  维护：anamaxlec
+#  原作者：AIsouler
+#  项目仓库：https://github.com/anamaxlec/NetWeave
+#  配置链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Config/mihomoConfig.yaml
+#  上游项目：https://github.com/AIsouler/MyClash
 #  友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
 #  ---------------------
 
@@ -19,7 +21,7 @@ proxy_providers_common:
 # 全局过滤节点
 global_exclude_filter:
   &global_exclude_filter {
-    exclude-filter: '(?i)(群|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|电报|频道|无法|说明|提示|访问|支持|教程|关注|更新|作者|加入|超时|收藏|优惠|福利|邀请|好友|失联|选择|剩余|公益|发布|DIZTNA|通路|登录|定时|渠道|牢记|永久|余额|阁下|本站|刷新|导航|建议|重置|以下|过滤|⚠️|@|t\.me\/\+|\bexpire\b|\bhttps?:\/\/|\.com|\btraffic\b)',
+    exclude-filter: '(?i)(群|返利|循环|官网|客服|网站|网址|获取|订阅|流量|到期|机场|下次|版本|官址|过期|已用|联系|邮箱|工单|贩卖|通知|倒卖|防止|国内|地址|电报|频道|无法|说明|提示|访问|支持|教程|关注|更新|作者|加入|超时|收藏|优惠|福利|邀请|好友|失联|选择|剩余|公益|发布|DIZTNA|通路|登录|定时|渠道|牢记|永久|余额|阁下|本站|刷新|导航|建议|重置|以下|过滤|⚠️|@|t\.me\/\+|\bexpire\b|\bhttps?:\/\/|\.com|\btraffic\b|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan)',
   }
 
 # 订阅提供者，如果你想要添加多个订阅提供者，可以复制 provider1 的配置块，并修改 url 、 path 和 additional-prefix 字段。
@@ -73,9 +75,9 @@ profile:
 dns_common:
   chinaDNS: &chinaDNS ['223.5.5.5#DIRECT', '119.29.29.29#DIRECT']
   foreignDNS: &foreignDNS ['https://cloudflare-dns.com/dns-query#默认代理', 'https://dns.google/dns-query#默认代理']
-  defaultDNS: &defaultDNS ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://1.12.12.12/dns-query#DIRECT']
-  proxyServerDNS:
-    &proxyServerDNS ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://doh.pub/dns-query#DIRECT']
+  defaultDNS: &defaultDNS ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT']
+  proxyServerDNS: &proxyServerDNS ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT']
+  chinaDohDNS: &chinaDohDNS ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT']
 
 dns:
   enable: true
@@ -86,14 +88,37 @@ dns:
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/15
   fake-ip-range6: 2001:2::1/48
-  fake-ip-filter: ['rule-set:private', 'rule-set:fakeip_filter', 'rule-set:cn', 'rule-set:googlefcm']
-  default-nameserver: *defaultDNS
-  proxy-server-nameserver: *proxyServerDNS
+  # FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
+  fake-ip-filter:
+    [
+      'rule-set:private',
+      'rule-set:fakeip_filter',
+      'rule-set:cn',
+      'rule-set:googlefcm',
+      'mtalk.google.com',
+      'mtalk4.google.com',
+      'mtalk-dev.google.com',
+      'mtalk-staging.google.com',
+      'alt1-mtalk.google.com',
+      'alt2-mtalk.google.com',
+      'alt3-mtalk.google.com',
+      'alt4-mtalk.google.com',
+      'alt5-mtalk.google.com',
+      'alt6-mtalk.google.com',
+      'alt7-mtalk.google.com',
+      'alt8-mtalk.google.com',
+      'android.apis.google.com',
+      'device-provisioning.googleapis.com',
+      'firebaseinstallations.googleapis.com',
+    ]
+  proxy-server-nameserver: *chinaDohDNS
+  default-nameserver: *chinaDohDNS
   nameserver: *foreignDNS
   nameserver-policy:
     'rule-set:private': 'system'
     'rule-set:douyin': ['180.184.1.1#DIRECT', '180.184.2.2#DIRECT']
-    'rule-set:cn': *chinaDNS
+    'rule-set:cn': *chinaDohDNS
+    'rule-set:geolocation-cn': *chinaDohDNS
   direct-nameserver: *chinaDNS
   direct-nameserver-follow-policy: true
 
@@ -196,6 +221,21 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/youtube.mrs'
     path: './ruleset/youtube.mrs'
     path-in-bundle: 'geo/geosite/youtube.mrs'
+  google_gemini:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google-gemini.mrs'
+    path: './ruleset/google_gemini.mrs'
+    path-in-bundle: 'geo/geosite/google-gemini.mrs'
+  openai:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/openai.mrs'
+    path: './ruleset/openai.mrs'
+    path-in-bundle: 'geo/geosite/openai.mrs'
+  anthropic:
+    <<: *rule_providers_domain
+    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/anthropic.mrs'
+    path: './ruleset/anthropic.mrs'
+    path-in-bundle: 'geo/geosite/anthropic.mrs'
   google:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/google.mrs'
@@ -321,21 +361,6 @@ rule-providers:
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geoip/spotify.mrs'
     path: './ruleset/spotify_ip.mrs'
     path-in-bundle: 'geo/geoip/spotify.mrs'
-  cryptocurrency:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/category-cryptocurrency.mrs'
-    path: './ruleset/cryptocurrency.mrs'
-    path-in-bundle: 'geo/geosite/category-cryptocurrency.mrs'
-  paypal:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/paypal.mrs'
-    path: './ruleset/paypal.mrs'
-    path-in-bundle: 'geo/geosite/paypal.mrs'
-  patreon:
-    <<: *rule_providers_domain
-    url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/patreon.mrs'
-    path: './ruleset/patreon.mrs'
-    path-in-bundle: 'geo/geosite/patreon.mrs'
   ehentai:
     <<: *rule_providers_domain
     url: 'https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/ehentai.mrs'
@@ -518,13 +543,54 @@ proxy-groups:
     <<: *group_common_load
 
   - name: 'FCM'
-    <<: [*group_common_select, *proxies_direct]
-    default-selected: '直连'
+    <<: *group_common_select
+    proxies:
+      [
+        '🇨🇳 直连 | IPv6优先',
+        '默认代理',
+        '手动选择',
+        '自动选择',
+        '负载均衡',
+        '直连',
+        '香港',
+        '日本',
+        '美国',
+        '新加坡',
+        '台湾',
+        '低倍率节点',
+        '高倍率节点',
+        '家宽节点',
+        '其他节点',
+      ]
+    default-selected: '🇨🇳 直连 | IPv6优先'
     icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Fcm.svg'
 
   - name: 'YouTube'
     <<: [*group_common_select, *proxies_default]
     icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/YouTube.svg'
+
+  - name: 'BT'
+    <<: [*group_common_select, *proxies_direct]
+    default-selected: '直连'
+
+  - name: 'Gemini'
+    default-selected: '美国'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png'
+
+  - name: 'OpenAI'
+    default-selected: '美国'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png'
+
+  - name: 'Anthropic'
+    default-selected: '美国'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png'
+
+  - name: 'GitHub'
+    <<: [*group_common_select, *proxies_default]
+    icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/GitHub.svg'
 
   - name: 'Google'
     <<: [*group_common_select, *proxies_default]
@@ -534,10 +600,6 @@ proxy-groups:
     <<: [*group_common_select, *proxies_default]
     default-selected: '美国'
     icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg'
-
-  - name: 'GitHub'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/GitHub.svg'
 
   - name: 'Microsoft'
     <<: [*group_common_select, *proxies_direct]
@@ -587,21 +649,6 @@ proxy-groups:
   - name: 'Spotify'
     <<: [*group_common_select, *proxies_direct]
     icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Spotify.svg'
-
-  - name: 'Crypto'
-    default-selected: '日本'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Bitcoin.svg'
-
-  - name: 'PayPal'
-    default-selected: '美国'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/PayPal.svg'
-
-  - name: 'Patreon'
-    default-selected: '香港'
-    <<: [*group_common_select, *proxies_default]
-    icon: 'https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Patreon.svg'
 
   - name: 'EHentai'
     default-selected: '美国'
@@ -698,6 +745,23 @@ proxy-groups:
 # --- 路由规则 (Rules) ---
 
 rules:
+  # BT / DHT 下载（默认直连；进程识别取决于内核环境）
+  - DOMAIN,dht.transmissionbt.com,BT
+  - DOMAIN,router.bittorrent.com,BT
+  - DOMAIN,router.utorrent.com,BT
+  - DOMAIN,dht.libtorrent.org,BT
+  - PROCESS-NAME,Transmission,BT
+  - PROCESS-NAME,transmission-daemon,BT
+  - PROCESS-NAME,transmission-qt,BT
+  - PROCESS-NAME,transmission-qt.exe,BT
+  - PROCESS-NAME,qbittorrent,BT
+  - PROCESS-NAME,qBittorrent,BT
+  - PROCESS-NAME,qbittorrent.exe,BT
+  - PROCESS-NAME,qbittorrent-nox,BT
+  - PROCESS-NAME,BitTorrent.exe,BT
+  - PROCESS-NAME,org.proninyaroslav.libretorrent,BT
+  - PROCESS-NAME,com.delphicoder.flud,BT
+
   # 广告拦截
   - RULE-SET,category-ads,AdBlock
 
@@ -705,7 +769,6 @@ rules:
   - RULE-SET,private,直连
 
   # 国内直连
-  - RULE-SET,geolocation-cn,直连
   - RULE-SET,games_cn,直连 # 已包含 steam 下载域名
   - RULE-SET,synology,直连
   - RULE-SET,nvidia_cn,直连
@@ -715,18 +778,21 @@ rules:
   - DOMAIN,international-gfe.download.nvidia.com,直连
   - DOMAIN-SUFFIX,ctaiot.com,直连
 
-  # 禁用国外 QUIC 流量（默认不启用，如果想启用请删除前面的#号注释）
-  # - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT
+  # 禁用国外 QUIC 流量（NetWeave 默认启用；国内域名与 IP 放行）
+  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT
 
   # 代理规则（非IP类）
   - RULE-SET,googlefcm,FCM
   - RULE-SET,youtube,YouTube
+  - RULE-SET,google_gemini,Gemini
+  - RULE-SET,openai,OpenAI
+  - RULE-SET,anthropic,Anthropic
+  - RULE-SET,github,GitHub
   - RULE-SET,google,Google
   - RULE-SET,ai,AI
   - DOMAIN,cdn.usefathom.com,AI
   - DOMAIN-SUFFIX,intercom.io,AI
   - DOMAIN-SUFFIX,intercomcdn.com,AI
-  - RULE-SET,github,GitHub
   - RULE-SET,microsoft,Microsoft
   - RULE-SET,apple,Apple
   - RULE-SET,telegram,Telegram
@@ -742,11 +808,11 @@ rules:
   - DOMAIN-KEYWORD,emby,Emby
   - RULE-SET,pikpak,PikPak
   - RULE-SET,spotify,Spotify
-  - RULE-SET,cryptocurrency,Crypto
   - RULE-SET,paypal,PayPal
   - RULE-SET,patreon,Patreon
   - RULE-SET,ehentai,EHentai
   - RULE-SET,geolocation-!cn,默认代理
+  - RULE-SET,geolocation-cn,直连
 
   # IP规则（直连）
   - RULE-SET,cn_ip,直连

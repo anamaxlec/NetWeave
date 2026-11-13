@@ -1,8 +1,10 @@
 /**
- * mihomo配置覆写脚本（全量版）
- * 作者：AIsouler
- * 源仓库：https://github.com/AIsouler/MyClash
- * 脚本链接：https://raw.githubusercontent.com/AIsouler/MyClash/main/Script/mihomoScript.js
+ * NetWeave - mihomo配置覆写脚本（全量版）
+ * 维护：anamaxlec
+ * 原作者：AIsouler
+ * 项目仓库：https://github.com/anamaxlec/NetWeave
+ * 脚本链接：https://raw.githubusercontent.com/anamaxlec/NetWeave/main/Script/mihomoScript.js
+ * 上游项目：https://github.com/AIsouler/MyClash
  * 友情推荐，非常好用、省电且内存占用低的代理软件：https://github.com/appshubcc/Bettbox
  */
 
@@ -23,8 +25,12 @@ const ruleOptionsEnable = {
   负载均衡: true, // 是否启用负载均衡策略组
 
   // 以下为分流策略配置
+  BT: true, // BT / DHT 下载流量（默认直连）
   FCM: true, // GoogleFCM服务
   YouTube: true, // YouTube视频平台
+  Gemini: true, // Google Gemini / AI Studio / NotebookLM 等
+  OpenAI: true, // OpenAI / ChatGPT / Codex
+  Anthropic: true, // Anthropic / Claude
   Google: true, // Google服务
   AI: true, // 国外AI服务
   GitHub: true, // GitHub代码托管平台
@@ -40,13 +46,13 @@ const ruleOptionsEnable = {
   Emby: true, // Emby媒体服务
   PikPak: true, // PikPak网盘服务
   Spotify: true, // Spotify音乐服务
-  Crypto: true, // 加密货币相关服务
   PayPal: true, // PayPal支付服务
   Patreon: true, // Patreon创作者赞助平台
   EHentai: true, // E-Hentai网站
   AdBlock: true, // 广告拦截
 
   // 以下为非分流策略配置
+  优先机场DNS: false, // 优先使用订阅原始 DNS 解析代理节点
   极简国内外分流模式: false, // 是否启用极简国内外分流模式
   生成地区自动选择组: true, // 是否生成地区自动选择策略组
   隐藏地区手动选择组: false, // 是否隐藏地区手动选择策略组
@@ -56,7 +62,7 @@ const ruleOptionsEnable = {
   过滤低倍率节点: false, // 是否过滤低倍率节点
   过滤高倍率节点: false, // 是否过滤高倍率节点
   过滤非地区节点: true, // 是否过滤非地区节点
-  屏蔽代理QUIC流量: false, // 是否屏蔽非国内目标的 QUIC 流量
+  屏蔽代理QUIC流量: true, // 是否屏蔽非国内目标的 QUIC 流量
   代理IPV4优先: false, // 是否将订阅节点统一为 IPv4 优先（与“代理IPV6优先”同时开启时不生效）
   代理IPV6优先: false, // 是否将订阅节点统一为 IPv6 优先（与“代理IPV4优先”同时开启时不生效）
   链式代理: false, // 是否启用链式代理（自定义节点作为落地节点，经“链式中转”策略组中转）
@@ -68,7 +74,6 @@ const prefixRules = [
   'RULE-SET,private,直连',
 
   // 国内直连
-  'RULE-SET,geolocation-cn,直连',
   'RULE-SET,games_cn,直连', // 已包含 steam 下载域名
   'RULE-SET,synology,直连',
   'RULE-SET,nvidia_cn,直连',
@@ -111,7 +116,26 @@ const excludeFilter =
 
 // 屏蔽代理QUIC流量
 const blockForeignQuic = [
-  'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT',
+  'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,geolocation-cn),(RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT',
+];
+
+// FCM real-IP 显式兜底；googlefcm rule-set 负责动态覆盖。
+const fcmRealIpFallback = [
+  'mtalk.google.com',
+  'mtalk4.google.com',
+  'mtalk-dev.google.com',
+  'mtalk-staging.google.com',
+  'alt1-mtalk.google.com',
+  'alt2-mtalk.google.com',
+  'alt3-mtalk.google.com',
+  'alt4-mtalk.google.com',
+  'alt5-mtalk.google.com',
+  'alt6-mtalk.google.com',
+  'alt7-mtalk.google.com',
+  'alt8-mtalk.google.com',
+  'android.apis.google.com',
+  'device-provisioning.googleapis.com',
+  'firebaseinstallations.googleapis.com',
 ];
 
 // 直连节点
@@ -291,6 +315,13 @@ const baseRuleProviders = {
 
   // --- 代理规则集 ---
 
+  googlefcm: {
+    ...ruleProviderCommonDomain,
+    url: `${ruleSetBaseUrl}geosite/googlefcm.mrs`,
+    path: './ruleset/googlefcm.mrs',
+    'path-in-bundle': 'geo/geosite/googlefcm.mrs',
+  },
+
   'geolocation-!cn': {
     ...ruleProviderCommonDomain,
     url: `${ruleSetBaseUrl}geosite/geolocation-!cn.mrs`,
@@ -384,10 +415,34 @@ const baseGroups = [
 const serviceConfigs = [
   ...baseGroups,
   {
-    name: 'FCM',
+    name: 'BT',
     baseOption: selectBaseOption,
     direct: true,
     defaultSelected: '直连',
+    rules: [
+      'DOMAIN,dht.transmissionbt.com,BT',
+      'DOMAIN,router.bittorrent.com,BT',
+      'DOMAIN,router.utorrent.com,BT',
+      'DOMAIN,dht.libtorrent.org,BT',
+      'PROCESS-NAME,Transmission,BT',
+      'PROCESS-NAME,transmission-daemon,BT',
+      'PROCESS-NAME,transmission-qt,BT',
+      'PROCESS-NAME,transmission-qt.exe,BT',
+      'PROCESS-NAME,qbittorrent,BT',
+      'PROCESS-NAME,qBittorrent,BT',
+      'PROCESS-NAME,qbittorrent.exe,BT',
+      'PROCESS-NAME,qbittorrent-nox,BT',
+      'PROCESS-NAME,BitTorrent.exe,BT',
+      'PROCESS-NAME,org.proninyaroslav.libretorrent,BT',
+      'PROCESS-NAME,com.delphicoder.flud,BT',
+    ],
+  },
+  {
+    name: 'FCM',
+    baseOption: selectBaseOption,
+    direct: true,
+    preferredDirect: '🇨🇳 直连 | IPv6优先',
+    defaultSelected: '🇨🇳 直连 | IPv6优先',
     providers: {
       googlefcm: {
         ...ruleProviderCommonDomain,
@@ -412,6 +467,65 @@ const serviceConfigs = [
     },
     icon: `${iconBaseUrl}YouTube.svg`,
     rules: ['RULE-SET,youtube,YouTube'],
+  },
+  {
+    name: 'Gemini',
+    baseOption: selectBaseOption,
+    defaultSelected: '美国',
+    providers: {
+      google_gemini: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/google-gemini.mrs`,
+        path: './ruleset/google_gemini.mrs',
+        'path-in-bundle': 'geo/geosite/google-gemini.mrs',
+      },
+    },
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png',
+    rules: ['RULE-SET,google_gemini,Gemini'],
+  },
+  {
+    name: 'OpenAI',
+    baseOption: selectBaseOption,
+    defaultSelected: '美国',
+    providers: {
+      openai: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/openai.mrs`,
+        path: './ruleset/openai.mrs',
+        'path-in-bundle': 'geo/geosite/openai.mrs',
+      },
+    },
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
+    rules: ['RULE-SET,openai,OpenAI'],
+  },
+  {
+    name: 'Anthropic',
+    baseOption: selectBaseOption,
+    defaultSelected: '美国',
+    providers: {
+      anthropic: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/anthropic.mrs`,
+        path: './ruleset/anthropic.mrs',
+        'path-in-bundle': 'geo/geosite/anthropic.mrs',
+      },
+    },
+    icon: 'https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png',
+    rules: ['RULE-SET,anthropic,Anthropic'],
+  },
+  {
+    name: 'GitHub',
+    baseOption: selectBaseOption,
+    providers: {
+      github: {
+        ...ruleProviderCommonDomain,
+        url: `${ruleSetBaseUrl}geosite/github.mrs`,
+        path: './ruleset/github.mrs',
+        'path-in-bundle': 'geo/geosite/github.mrs',
+      },
+    },
+    icon: `${iconBaseUrl}GitHub.svg`,
+    rules: ['RULE-SET,github,GitHub'],
   },
   {
     name: 'Google',
@@ -453,20 +567,6 @@ const serviceConfigs = [
       'DOMAIN-SUFFIX,intercom.io,AI',
       'DOMAIN-SUFFIX,intercomcdn.com,AI',
     ],
-  },
-  {
-    name: 'GitHub',
-    baseOption: selectBaseOption,
-    providers: {
-      github: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/github.mrs`,
-        path: './ruleset/github.mrs',
-        'path-in-bundle': 'geo/geosite/github.mrs',
-      },
-    },
-    icon: `${iconBaseUrl}GitHub.svg`,
-    rules: ['RULE-SET,github,GitHub'],
   },
   {
     name: 'Microsoft',
@@ -710,51 +810,6 @@ const serviceConfigs = [
     icon: `${iconBaseUrl}Spotify.svg`,
     rules: ['RULE-SET,spotify,Spotify'],
     ipRules: ['RULE-SET,spotify_ip,Spotify'],
-  },
-  {
-    name: 'Crypto',
-    baseOption: selectBaseOption,
-    defaultSelected: '日本',
-    providers: {
-      cryptocurrency: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/category-cryptocurrency.mrs`,
-        path: './ruleset/cryptocurrency.mrs',
-        'path-in-bundle': 'geo/geosite/category-cryptocurrency.mrs',
-      },
-    },
-    icon: `${iconBaseUrl}Bitcoin.svg`,
-    rules: ['RULE-SET,cryptocurrency,Crypto'],
-  },
-  {
-    name: 'PayPal',
-    baseOption: selectBaseOption,
-    defaultSelected: '美国',
-    providers: {
-      paypal: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/paypal.mrs`,
-        path: './ruleset/paypal.mrs',
-        'path-in-bundle': 'geo/geosite/paypal.mrs',
-      },
-    },
-    icon: `${iconBaseUrl}PayPal.svg`,
-    rules: ['RULE-SET,paypal,PayPal'],
-  },
-  {
-    name: 'Patreon',
-    baseOption: selectBaseOption,
-    defaultSelected: '香港',
-    providers: {
-      patreon: {
-        ...ruleProviderCommonDomain,
-        url: `${ruleSetBaseUrl}geosite/patreon.mrs`,
-        path: './ruleset/patreon.mrs',
-        'path-in-bundle': 'geo/geosite/patreon.mrs',
-      },
-    },
-    icon: `${iconBaseUrl}Patreon.svg`,
-    rules: ['RULE-SET,patreon,Patreon'],
   },
   {
     name: 'EHentai',
@@ -1200,6 +1255,10 @@ function buildFunctionalGroups(filteredProxies, generatedRegionGroups, customize
             ...(svc.direct ? ['直连'] : []),
           ];
 
+    if (svc.preferredDirect && !groupProxies.includes(svc.preferredDirect)) {
+      groupProxies.unshift(svc.preferredDirect);
+    }
+
     const selected = groupProxies.includes(svc.defaultSelected) ? svc.defaultSelected : undefined;
 
     functionalGroups.push({
@@ -1446,8 +1505,10 @@ const commonDnsRegex = new RegExp(
 // 国内外 DNS 定义
 const chinaDNS = ['223.5.5.5#DIRECT', '119.29.29.29#DIRECT'];
 const foreignDNS = ['https://cloudflare-dns.com/dns-query#默认代理', 'https://dns.google/dns-query#默认代理'];
-const defaultDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
-const proxyServerDNS = ['114.114.114.114#DIRECT', 'tls://223.5.5.5#DIRECT', 'https://doh.pub/dns-query#DIRECT'];
+const defaultDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
+const proxyServerDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
+
+const chinaDohDNS = ['https://223.5.5.5/dns-query#DIRECT', 'https://1.12.12.12/dns-query#DIRECT'];
 
 /**
  * hosts 匹配优先级：精确 > +. > . > *（同级按出现顺序）
@@ -1725,6 +1786,49 @@ function simplifyDomainPolicy(policy) {
 }
 
 /**
+ * 机场 DNS 兼容：只为订阅节点的域名保留机场原始解析器。
+ * proxy-server-nameserver-policy 允许按节点域名指定入口；不覆盖普通网站 DNS。
+ * DNS 连接参数（#DIRECT / #RULES / #ecs 等）保留原样。
+ */
+function buildAirportNodeDnsPolicy(originalDnsConfig, proxyDomains, shouldRewriteByHosts) {
+  const policy = {};
+  const matchProxyDomain = createDomainMatcher(proxyDomains);
+  const originalPolicy = {
+    ...originalDnsConfig['nameserver-policy'],
+    ...originalDnsConfig['proxy-server-nameserver-policy'],
+  };
+
+  for (const [pattern, source] of Object.entries(originalPolicy)) {
+    if (!matchProxyDomain(pattern)) continue;
+    if (typeof source === 'string' && source.trim()) {
+      policy[pattern] = source;
+    } else if (Array.isArray(source)) {
+      const entries = source.filter((dns) => typeof dns === 'string' && dns.trim());
+      if (entries.length) policy[pattern] = entries;
+    }
+  }
+
+  const dnsList = (source) => {
+    const values = Array.isArray(source) ? source : typeof source === 'string' ? [source] : [];
+    return values.filter((dns) => typeof dns === 'string' && dns.trim());
+  };
+
+  // 如果机场使用指向本地 DNS listen 的占位解析器并已映射 hosts，
+  // 不要再次把该占位地址当成实际的节点 DNS。
+  const proxyDNS = shouldRewriteByHosts ? [] : dnsList(originalDnsConfig['proxy-server-nameserver']);
+  const fallback = proxyDNS.length ? proxyDNS : dnsList(originalDnsConfig.nameserver);
+  const patterns = Object.keys(policy);
+  if (fallback.length) {
+    for (const domain of proxyDomains) {
+      const matchesDomain = createDomainMatcher(new Set([domain]));
+      if (patterns.some((pattern) => matchesDomain(pattern))) continue;
+      policy[domain] = [...fallback];
+    }
+  }
+  return policy;
+}
+
+/**
  * 构建 DNS 与 hosts：保留私有 DNS、节点域名 policy/fake-ip-filter，并按 hosts 改写节点 server
  * hosts改写条件（满足任意一个条件即可）：
  * 1. proxy-server-nameserver 有且仅有一个 DNS 并且该 DNS 包含非空的 listen 值
@@ -1746,7 +1850,10 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
       (listenValue.includes('0.0.0.0') &&
         proxyServerNameservers.some((dns) => String(dns).toLowerCase().includes('127.0.0.1'))));
 
-  const mappedProxies = shouldRewriteByHosts ? applyHostsToProxies(filteredProxies, config.hosts) : filteredProxies;
+  const mappedProxies =
+    shouldRewriteByHosts || ruleOptionsEnable.优先机场DNS
+      ? applyHostsToProxies(filteredProxies, config.hosts)
+      : filteredProxies;
 
   const proxyDomains = new Set(
     mappedProxies
@@ -1800,6 +1907,10 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
       ? simplifyDomainPolicy(matchedProxyPolicy)
       : matchedProxyPolicy;
 
+  const effectiveProxyServerPolicy = ruleOptionsEnable.优先机场DNS
+    ? buildAirportNodeDnsPolicy(originalDnsConfig, proxyDomains, shouldRewriteByHosts)
+    : proxyServerPolicy;
+
   const originalFakeIpFilter = originalDnsConfig['fake-ip-filter'] || [];
   const proxyFakeIpFilter = originalFakeIpFilter.filter((pattern) => matchProxyDomain(pattern));
 
@@ -1812,23 +1923,27 @@ function buildDnsAndHostsConfig(config, filteredProxies) {
     'enhanced-mode': 'fake-ip',
     'fake-ip-range': '198.18.0.1/15',
     'fake-ip-range6': '2001:2::1/48',
+    // FCM 使用 googlefcm rule-set 动态覆盖，并保留 Google 官方域名作为显式兜底
     'fake-ip-filter': [
       'rule-set:private',
       'rule-set:fakeip_filter',
       'rule-set:cn',
-      ...(minimalModeEnabled ? [] : ruleOptionsEnable['FCM'] ? ['rule-set:googlefcm'] : []),
+      'rule-set:geolocation-cn',
+      ...(minimalModeEnabled ? [] : ['rule-set:googlefcm']),
+      ...fcmRealIpFallback,
       ...proxyFakeIpFilter,
     ],
-    'default-nameserver': defaultDNS,
-    'proxy-server-nameserver': proxyServerDNS,
-    ...(Object.keys(proxyServerPolicy).length > 0 && {
-      'proxy-server-nameserver-policy': proxyServerPolicy,
+    'default-nameserver': chinaDohDNS,
+    'proxy-server-nameserver': chinaDohDNS,
+    ...(Object.keys(effectiveProxyServerPolicy).length > 0 && {
+      'proxy-server-nameserver-policy': effectiveProxyServerPolicy,
     }),
     nameserver: foreignDNS,
     'nameserver-policy': {
       'rule-set:private': 'system',
       'rule-set:douyin': ['180.184.1.1#DIRECT', '180.184.2.2#DIRECT'],
-      'rule-set:cn': chinaDNS,
+      'rule-set:cn': chinaDohDNS,
+      'rule-set:geolocation-cn': chinaDohDNS,
     },
     'direct-nameserver': chinaDNS,
     'direct-nameserver-follow-policy': true,
@@ -1938,6 +2053,7 @@ function main(config) {
     ...(ruleOptionsEnable.屏蔽代理QUIC流量 ? blockForeignQuic : []),
     ...functionalRules,
     'RULE-SET,geolocation-!cn,默认代理',
+    'RULE-SET,geolocation-cn,直连',
     'RULE-SET,cn_ip,直连',
     'RULE-SET,private_ip,直连',
     ...functionalIpRules,
