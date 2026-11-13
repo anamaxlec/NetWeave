@@ -16,10 +16,45 @@ from netweave_patch_helpers import (  # noqa: E402
     verify_googlefcm_provider,
     ensure_quic_rule,
     QUIC_RULE,
+    ensure_fcm_preferred_exit_before_selected,
 )
 
 
 class NetWeavePatchTests(unittest.TestCase):
+    def test_fcm_preferred_exit_handles_upstream_selection_layouts(self):
+        prefix = (
+            "  for (const svc of serviceConfigs) {\n"
+            "    functionalRules.push(...(svc.rules || []));\n"
+            "  }\n"
+            "  for (const svc of serviceConfigs) {\n"
+        )
+        suffix = (
+            "    functionalGroups.push({ name: svc.name, proxies: groupProxies });\n"
+            "  }\n"
+            "  functionalGroups.push({\n"
+            "    ...selectBaseOption,\n"
+            "    name: '漏网之鱼',\n"
+            "  });\n"
+        )
+        for declaration in ("    let groupProxies = [];\n", "    const groupProxies = [];\n"):
+            for selected in (
+                "    const selected =\n      groupProxies.includes(svc.defaultSelected) ? svc.defaultSelected : undefined;\n",
+                "    const selected = groupProxies.includes(svc.defaultSelected) ? svc.defaultSelected : undefined;\n",
+            ):
+                with self.subTest(declaration=declaration.strip(), selected=selected.strip()[:30]):
+                    fixture = prefix + declaration + selected + suffix
+                    result = ensure_fcm_preferred_exit_before_selected(
+                        fixture, Path('Script/mihomoScript.js')
+                    )
+                    self.assertLess(
+                        result.index("groupProxies.unshift(svc.preferredDirect)"),
+                        result.index("    const selected ="),
+                    )
+                    self.assertEqual(
+                        ensure_fcm_preferred_exit_before_selected(result, Path('Script/mihomoScript.js')),
+                        result,
+                    )
+
     def test_bt_group_order_is_stable_across_downstream_replays(self):
         from preserve_bt import patch_static_text
 

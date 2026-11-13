@@ -293,3 +293,37 @@ def ensure_quic_rule(text, path):
     name = toggles[0].group(1)
     return text.replace(f"  {name}: false,", f"  {name}: true,", 1)
 
+
+
+def ensure_fcm_preferred_exit_before_selected(text, path):
+    """Insert an optional FCM exit before default-selection validation.
+
+    Upstream has used both a multiline and a one-line "const selected = ..."
+    declaration. Never fall back to inserting after that calculation.
+    """
+    loop_start = text.find('  for (const svc of serviceConfigs) {')
+    loop_end = text.find(
+        "  functionalGroups.push({\n    ...selectBaseOption,\n    name: '漏网之鱼'",
+        loop_start,
+    )
+    if loop_start == -1 or loop_end == -1:
+        raise RuntimeError(f'{path}: service group construction loop not found')
+    loop = text[loop_start:loop_end]
+    preferred_block = (
+        "    if (svc.preferredDirect && !groupProxies.includes(svc.preferredDirect)) {\n"
+        "      groupProxies.unshift(svc.preferredDirect);\n"
+        "    }\n\n"
+    )
+    if loop.count(preferred_block) > 1:
+        raise RuntimeError(f'{path}: repeated preferredDirect insertion')
+    loop = loop.replace(preferred_block, '', 1)
+
+    marker = '    const selected ='
+    if loop.count(marker) != 1:
+        raise RuntimeError(f'{path}: selected calculation missing or ambiguous')
+    selected_pos = loop.index(marker)
+    if 'groupProxies' not in loop[:selected_pos]:
+        raise RuntimeError(f'{path}: groupProxies must be built before selection')
+
+    loop = loop[:selected_pos] + preferred_block + loop[selected_pos:]
+    return text[:loop_start] + loop + text[loop_end:]

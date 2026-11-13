@@ -8,6 +8,7 @@ from netweave_patch_helpers import (
     verify_tw_full_js,
     verify_tw_static,
     ensure_quic_rule,
+    ensure_fcm_preferred_exit_before_selected,
     QUIC_RULE,
     verify_googlefcm_provider,
 )
@@ -427,29 +428,7 @@ def ensure_js_fcm_ipv6_prefer(text, path):
         )
     text = text[:block_start] + block + text[fcm_end:]
 
-    loop_start = text.find('  for (const svc of serviceConfigs) {')
-    loop_end = text.find("  functionalGroups.push({\n    ...selectBaseOption,\n    name: '漏网之鱼'", loop_start)
-    if loop_start == -1 or loop_end == -1:
-        raise RuntimeError(f'{path}: service group construction loop not found')
-    loop = text[loop_start:loop_end]
-    preferred_block = (
-        "    if (svc.preferredDirect && !groupProxies.includes(svc.preferredDirect)) {\n"
-        "      groupProxies.unshift(svc.preferredDirect);\n"
-        "    }\n\n"
-    )
-    # Upstream now computes "selected" before pushing the group. Insert the
-    # preferred direct proxy before that check, not merely before push.
-    loop = loop.replace(preferred_block, '', 1)
-    selected_marker = '    const selected =\n'
-    push_marker = '    functionalGroups.push({\n'
-    marker = selected_marker if selected_marker in loop else push_marker
-    if loop.count(marker) != 1:
-        raise RuntimeError(f'{path}: FCM selection/push anchor changed')
-    pos = loop.find(marker)
-    loop = loop[:pos] + preferred_block + loop[pos:]
-    text = text[:loop_start] + loop + text[loop_end:]
-
-    return text
+    return ensure_fcm_preferred_exit_before_selected(text, path)
 
 
 def ensure_static_service_before_cn_fallback(text, path):
