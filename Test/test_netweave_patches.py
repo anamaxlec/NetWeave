@@ -20,6 +20,46 @@ from netweave_patch_helpers import (  # noqa: E402
 
 
 class NetWeavePatchTests(unittest.TestCase):
+    def test_bt_group_order_is_stable_across_downstream_replays(self):
+        from preserve_bt import patch_static_text
+
+        bt_group = (
+            "  - name: 'BT'\n"
+            "    <<: [*group_common_select, *proxies_direct]\n"
+            "    default-selected: '直连'\n\n"
+        )
+        for names in (
+            ("Gemini", "OpenAI", "Anthropic", "GitHub", "Google"),
+            ("Google",),
+        ):
+            with self.subTest(services=names):
+                groups = ''.join(
+                    f"  - name: '{name}'\n    type: select\n\n"
+                    for name in names
+                )
+                fixture = (
+                    "proxy-groups:\n"
+                    + groups
+                    + "rules:\n"
+                    + "  # 广告拦截\n"
+                    + "  - RULE-SET,geolocation-!cn,默认代理\n"
+                )
+                path = Path('Config/mihomoConfig.yaml')
+                first = patch_static_text(fixture, path)
+                self.assertLess(first.index("  - name: 'BT'\n"), first.index(f"  - name: '{names[0]}'\n"))
+                self.assertEqual(patch_static_text(first, path), first)
+
+                # Recreate the original bug: BT inserted right before Google,
+                # after the dedicated groups have already been created.
+                displaced = first.replace(bt_group, '', 1).replace(
+                    "  - name: 'Google'\n",
+                    bt_group + "  - name: 'Google'\n",
+                    1,
+                )
+                corrected = patch_static_text(displaced, path)
+                self.assertEqual(corrected, first)
+                self.assertEqual(patch_static_text(corrected, path), corrected)
+
     def test_googlefcm_provider_accepts_upstream_cdn_changes(self):
         static = (ROOT / 'Config' / 'mihomoConfig.yaml').read_text(encoding='utf-8')
         js = (ROOT / 'Script' / 'Script.js').read_text(encoding='utf-8')

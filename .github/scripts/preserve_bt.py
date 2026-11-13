@@ -71,14 +71,36 @@ def patch_static_text(text, path):
     group_marker = "  - name: 'BT'\n"
     if text.count(group_marker) > 1:
         raise RuntimeError(f"{path}: duplicate BT group")
-    if group_marker not in text:
-        marker = "  - name: 'Google'\n"
+
+    # preserve_service_groups.py reorders Gemini/OpenAI/Anthropic/GitHub
+    # immediately before Google. BT must be placed BEFORE those groups,
+    # otherwise a second replay moves them across BT and breaks idempotency.
+    anchors = [
+        f"  - name: '{name}'\n"
+        for name in ("Gemini", "OpenAI", "Anthropic", "GitHub", "Google")
+    ]
+    present_anchors = [(text.index(item), item) for item in anchors if item in text]
+    if not present_anchors:
+        raise RuntimeError(f"{path}: service group ordering anchor missing")
+    first_pos, anchor = min(present_anchors)
+
+    bt_pos = text.find(group_marker)
+    if bt_pos == -1:
         group = (
             "  - name: 'BT'\n"
             "    <<: [*group_common_select, *proxies_direct]\n"
             "    default-selected: '直连'\n\n"
         )
-        text = replace_once(text, marker, group + marker, path)
+        text = replace_once(text, anchor, group + anchor, path)
+    elif bt_pos > first_pos:
+        # Normalize earlier builds that inserted BT between dedicated services
+        # and Google. Preserve any existing BT group configuration unchanged.
+        end = text.find("  - name: '", bt_pos + len(group_marker))
+        if end < 0:
+            raise RuntimeError(f"{path}: BT group boundary missing")
+        group = text[bt_pos:end]
+        text = text[:bt_pos] + text[end:]
+        text = replace_once(text, anchor, group + anchor, path)
 
     present = [rule for rule in BT_RULES if f"  - {rule}\n" in text]
     if present and len(present) != len(BT_RULES):
