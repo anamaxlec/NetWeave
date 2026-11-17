@@ -18,9 +18,64 @@ from netweave_patch_helpers import (  # noqa: E402
     QUIC_RULE,
     ensure_fcm_preferred_exit_before_selected,
 )
+from preserve_upstream_compat import patch_static_dns
+from preserve_downstream import ensure_static_fcm_ipv6_prefer
 
 
 class NetWeavePatchTests(unittest.TestCase):
+    def test_dns_replay_supports_nested_and_flat_upstream_anchors(self):
+        for name in ('mihomoConfig.yaml', 'mihomoConfigLite.yaml'):
+            original = (ROOT / 'Config' / name).read_text(encoding='utf-8')
+            source = re.sub(r'(?m)^  chinaDohDNS:.*\n', '', original, count=1)
+            start = source.index('dns_common:\n')
+            end = source.index('\ndns:\n', start)
+            definitions = source[start + len('dns_common:\n'):end]
+            flat = (
+                source[:start]
+                + ''.join(line[2:] if line.startswith('  ') else line
+                          for line in definitions.splitlines(keepends=True))
+                + source[end:]
+            )
+            for layout, fixture in (('nested', source), ('flat', flat)):
+                with self.subTest(name=name, layout=layout):
+                    path = Path('Config') / name
+                    patched = patch_static_dns(fixture, path)
+                    self.assertEqual(patch_static_dns(patched, path), patched)
+                    self.assertIn('default-nameserver: *chinaDohDNS', patched)
+                    self.assertIn('proxy-server-nameserver: *chinaDohDNS', patched)
+                    indentation = '  ' if layout == 'nested' else ''
+                    self.assertIn(indentation + 'defaultDNS:', patched)
+                    self.assertIn(indentation + 'chinaDohDNS:', patched)
+
+    def test_tw_and_fcm_replay_supports_flat_proxy_anchors(self):
+        for name in ('mihomoConfig.yaml', 'mihomoConfigLite.yaml'):
+            original = (ROOT / 'Config' / name).read_text(encoding='utf-8')
+            flat = original
+            for key in ('proxies_default', 'proxies_direct', 'proxies_reject', 'SG_filter', 'TW_filter'):
+                flat = flat.replace('  ' + key + ':', key + ':', 1)
+            flat = re.sub(r'(?m)^TW_filter:.*\n', '', flat, count=1)
+            flat = re.sub(
+                r"(?ms)^  - name: '台湾'\n.*?(?=^  - name: '低倍率节点'\n)",
+                '',
+                flat,
+                count=1,
+            )
+            flat = flat.replace("'台湾',", '').replace('|' + TW_PATTERN, '')
+            with self.subTest(name=name):
+                path = Path('Config') / name
+                restored = ensure_static_tw(flat, path)
+                verify_tw_static(restored, path)
+                self.assertIn('TW_filter: &TW_filter', restored)
+                self.assertEqual(ensure_static_tw(restored, path), restored)
+
+        full = (ROOT / 'Config' / 'mihomoConfig.yaml').read_text(encoding='utf-8')
+        flat = full.replace('  proxies_direct:', 'proxies_direct:', 1)
+        flat = flat.replace('  proxies_reject:', 'proxies_reject:', 1)
+        path = Path('Config/mihomoConfig.yaml')
+        patched = ensure_static_fcm_ipv6_prefer(flat, path)
+        self.assertIn("default-selected: '🇨🇳 直连 | IPv6优先'", patched)
+        self.assertEqual(ensure_static_fcm_ipv6_prefer(patched, path), patched)
+
     def test_fcm_preferred_exit_handles_upstream_selection_layouts(self):
         prefix = (
             "  for (const svc of serviceConfigs) {\n"

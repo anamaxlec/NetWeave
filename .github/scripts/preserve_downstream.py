@@ -368,11 +368,11 @@ def ensure_static_fcm_ipv6_prefer(text, path):
     if path.name != 'mihomoConfig.yaml':
         return text
 
-    direct_start = text.find('  proxies_direct:\n')
-    direct_end = text.find('  proxies_reject:', direct_start)
-    if direct_start == -1 or direct_end == -1:
+    direct_match = re.search(r'(?m)^[ \t]*proxies_direct:\s*$', text)
+    reject_match = re.search(r'(?m)^[ \t]*proxies_reject:', text)
+    if direct_match is None or reject_match is None or reject_match.start() <= direct_match.start():
         raise RuntimeError(f'{path}: proxies_direct block not found')
-    direct_block = text[direct_start:direct_end]
+    direct_block = text[direct_match.start():reject_match.start()]
     direct_options = re.findall(r"'([^']+)'", direct_block)
     if '直连' not in direct_options:
         raise RuntimeError(f'{path}: proxies_direct does not contain 直连')
@@ -540,84 +540,89 @@ def patch_js(path):
     path.write_text(text, encoding='utf-8')
 
 
-for file in STATIC_FILES:
-    patch_static(file)
-for file in JS_FILES:
-    patch_js(file)
+def main():
+    for file in STATIC_FILES:
+        patch_static(file)
+    for file in JS_FILES:
+        patch_js(file)
 
-for path in STATIC_FILES + JS_FILES:
-    text = path.read_text(encoding='utf-8')
-    if 'NetWeave' not in text.splitlines()[1]:
-        raise RuntimeError(f'{path}: NetWeave header was not preserved')
-    if GOOGLEFCM_RULESET not in text:
-        raise RuntimeError(f'{path}: missing {GOOGLEFCM_RULESET} in fake-ip-filter')
-    verify_googlefcm_provider(text, path)
-    if QUIC_RULE not in text:
-        raise RuntimeError(f'{path}: missing protected China QUIC rule')
+    for path in STATIC_FILES + JS_FILES:
+        text = path.read_text(encoding='utf-8')
+        if 'NetWeave' not in text.splitlines()[1]:
+            raise RuntimeError(f'{path}: NetWeave header was not preserved')
+        if GOOGLEFCM_RULESET not in text:
+            raise RuntimeError(f'{path}: missing {GOOGLEFCM_RULESET} in fake-ip-filter')
+        verify_googlefcm_provider(text, path)
+        if QUIC_RULE not in text:
+            raise RuntimeError(f'{path}: missing protected China QUIC rule')
 
-    if path.suffix == '.yaml':
-        verify_tw_static(text, path)
-        for domain in FCM_DOMAINS:
-            if domain not in text:
-                raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
-        required = [
-            'default-nameserver: *chinaDohDNS',
-            'nameserver: *foreignDNS',
-            "'rule-set:cn': *chinaDohDNS",
-            "'rule-set:geolocation-cn': *chinaDohDNS",
-        ]
-        cn_rule = '  - RULE-SET,geolocation-cn,直连\n'
-        foreign_rule = '  - RULE-SET,geolocation-!cn,默认代理\n'
-    else:
-        if 'const fcmRealIpFallback = [' not in text or '...fcmRealIpFallback,' not in text:
-            raise RuntimeError(f'{path}: FCM fallback is not expressed as an upstream-style spread')
-        for domain in FCM_DOMAINS:
-            if domain not in text:
-                raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
-        required = [
-            "'default-nameserver': chinaDohDNS,",
-            'nameserver: foreignDNS,',
-            "'rule-set:cn': chinaDohDNS,",
-            "'rule-set:geolocation-cn': chinaDohDNS,",
-        ]
-        cn_rule = "    'RULE-SET,geolocation-cn,直连',\n"
-        foreign_rule = "    'RULE-SET,geolocation-!cn,默认代理',\n"
+        if path.suffix == '.yaml':
+            verify_tw_static(text, path)
+            for domain in FCM_DOMAINS:
+                if domain not in text:
+                    raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
+            required = [
+                'default-nameserver: *chinaDohDNS',
+                'nameserver: *foreignDNS',
+                "'rule-set:cn': *chinaDohDNS",
+                "'rule-set:geolocation-cn': *chinaDohDNS",
+            ]
+            cn_rule = '  - RULE-SET,geolocation-cn,直连\n'
+            foreign_rule = '  - RULE-SET,geolocation-!cn,默认代理\n'
+        else:
+            if 'const fcmRealIpFallback = [' not in text or '...fcmRealIpFallback,' not in text:
+                raise RuntimeError(f'{path}: FCM fallback is not expressed as an upstream-style spread')
+            for domain in FCM_DOMAINS:
+                if domain not in text:
+                    raise RuntimeError(f'{path}: missing protected FCM domain {domain}')
+            required = [
+                "'default-nameserver': chinaDohDNS,",
+                'nameserver: foreignDNS,',
+                "'rule-set:cn': chinaDohDNS,",
+                "'rule-set:geolocation-cn': chinaDohDNS,",
+            ]
+            cn_rule = "    'RULE-SET,geolocation-cn,直连',\n"
+            foreign_rule = "    'RULE-SET,geolocation-!cn,默认代理',\n"
 
-    for item in required:
-        if item not in text:
-            raise RuntimeError(f'{path}: missing protected DNS setting {item}')
-    if text.find(cn_rule) < text.find(foreign_rule):
-        raise RuntimeError(f'{path}: geolocation-cn must remain a fallback after specific service routing')
+        for item in required:
+            if item not in text:
+                raise RuntimeError(f'{path}: missing protected DNS setting {item}')
+        if text.find(cn_rule) < text.find(foreign_rule):
+            raise RuntimeError(f'{path}: geolocation-cn must remain a fallback after specific service routing')
 
-full_static = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
-full_js = Path('Script/mihomoScript.js').read_text(encoding='utf-8')
-verify_tw_full_js(full_js, Path('Script/mihomoScript.js'))
+    full_static = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
+    full_js = Path('Script/mihomoScript.js').read_text(encoding='utf-8')
+    verify_tw_full_js(full_js, Path('Script/mihomoScript.js'))
 
-static_fcm_start = full_static.find("  - name: 'FCM'\n")
-static_fcm_end = full_static.find("  - name: 'YouTube'\n", static_fcm_start)
-js_fcm_start = full_js.find("    name: 'FCM',")
-js_fcm_end = full_js.find("  {\n    name: 'YouTube',", js_fcm_start)
-if static_fcm_start == -1 or static_fcm_end == -1 or js_fcm_start == -1 or js_fcm_end == -1:
-    raise RuntimeError('FCM IPv6-prefer downstream protection failed: FCM block missing')
-static_fcm = full_static[static_fcm_start:static_fcm_end]
-js_fcm = full_js[js_fcm_start:js_fcm_end]
-for required in [
-    FCM_IPV6_PREFER_DIRECT,
-    f"default-selected: '{FCM_IPV6_PREFER_DIRECT}'",
-]:
-    if required not in static_fcm:
-        raise RuntimeError(f'FCM IPv6-prefer downstream protection failed: static group missing {required}')
-for required in [
-    f"preferredDirect: '{FCM_IPV6_PREFER_DIRECT}'",
-    f"defaultSelected: '{FCM_IPV6_PREFER_DIRECT}'",
-]:
-    if required not in js_fcm:
-        raise RuntimeError(f'FCM IPv6-prefer downstream protection failed: JS service config missing {required}')
-if 'groupProxies.unshift(svc.preferredDirect)' not in full_js:
-    raise RuntimeError('FCM IPv6-prefer downstream protection failed: preferredDirect injection missing')
+    static_fcm_start = full_static.find("  - name: 'FCM'\n")
+    static_fcm_end = full_static.find("  - name: 'YouTube'\n", static_fcm_start)
+    js_fcm_start = full_js.find("    name: 'FCM',")
+    js_fcm_end = full_js.find("  {\n    name: 'YouTube',", js_fcm_start)
+    if static_fcm_start == -1 or static_fcm_end == -1 or js_fcm_start == -1 or js_fcm_end == -1:
+        raise RuntimeError('FCM IPv6-prefer downstream protection failed: FCM block missing')
+    static_fcm = full_static[static_fcm_start:static_fcm_end]
+    js_fcm = full_js[js_fcm_start:js_fcm_end]
+    for required in [
+        FCM_IPV6_PREFER_DIRECT,
+        f"default-selected: '{FCM_IPV6_PREFER_DIRECT}'",
+    ]:
+        if required not in static_fcm:
+            raise RuntimeError(f'FCM IPv6-prefer downstream protection failed: static group missing {required}')
+    for required in [
+        f"preferredDirect: '{FCM_IPV6_PREFER_DIRECT}'",
+        f"defaultSelected: '{FCM_IPV6_PREFER_DIRECT}'",
+    ]:
+        if required not in js_fcm:
+            raise RuntimeError(f'FCM IPv6-prefer downstream protection failed: JS service config missing {required}')
+    if 'groupProxies.unshift(svc.preferredDirect)' not in full_js:
+        raise RuntimeError('FCM IPv6-prefer downstream protection failed: preferredDirect injection missing')
 
-for forbidden in ["name: 'Crypto'", 'RULE-SET,cryptocurrency,Crypto', 'category-cryptocurrency.mrs']:
-    if forbidden in full_static or forbidden in full_js:
-        raise RuntimeError(f'Crypto downstream removal failed: still contains {forbidden}')
+    for forbidden in ["name: 'Crypto'", 'RULE-SET,cryptocurrency,Crypto', 'category-cryptocurrency.mrs']:
+        if forbidden in full_static or forbidden in full_js:
+            raise RuntimeError(f'Crypto downstream removal failed: still contains {forbidden}')
 
-print('NetWeave downstream semantic patches verified for all four files')
+    print('NetWeave downstream semantic patches verified for all four files')
+
+
+if __name__ == '__main__':
+    main()

@@ -26,13 +26,25 @@ def dns_array_block(name, indent=''):
 
 
 def ensure_static_upstream_dns_values(text, path):
-    start = text.find('  defaultDNS:')
-    proxy = text.find('  proxyServerDNS:', start)
-    dns_section = text.find('\ndns:\n', proxy)
-    if start == -1 or proxy == -1 or dns_section == -1:
+    # MyClash 现在将这些锚点放在 YAML 顶层；旧版则嵌套在 dns_common 下。
+    # 依据两个定义的实际缩进重建，保留两种布局以及后面的 dns 块。
+    default_match = re.search(r'(?m)^(?P<indent>[ \t]*)defaultDNS:.*$', text)
+    proxy_match = re.search(r'(?m)^(?P<indent>[ \t]*)proxyServerDNS:.*$', text)
+    if (
+        default_match is None
+        or proxy_match is None
+        or proxy_match.start() <= default_match.start()
+        or default_match.group('indent') != proxy_match.group('indent')
+    ):
         raise RuntimeError(f'{path}: upstream defaultDNS/proxyServerDNS block not found')
 
-    replacement = dns_array_block('defaultDNS', '  ') + dns_array_block('proxyServerDNS', '  ')
+    start = default_match.start()
+    dns_section = text.find('\ndns:\n', proxy_match.end())
+    if dns_section == -1:
+        raise RuntimeError(f'{path}: dns section not found after DNS anchors')
+
+    indent = default_match.group('indent')
+    replacement = dns_array_block('defaultDNS', indent) + dns_array_block('proxyServerDNS', indent)
     return text[:start] + replacement + text[dns_section:]
 
 
@@ -215,40 +227,45 @@ def patch_js(path):
     path.write_text(text, encoding='utf-8')
 
 
-for file in STATIC_FILES:
-    patch_static(file)
-for file in JS_FILES:
-    patch_js(file)
+def main():
+    for file in STATIC_FILES:
+        patch_static(file)
+    for file in JS_FILES:
+        patch_js(file)
 
-for file in STATIC_FILES:
-    text = file.read_text(encoding='utf-8')
-    if 'default-nameserver: *chinaDohDNS' not in text:
-        raise RuntimeError(f'{file}: encrypted default DNS policy not preserved')
-    if 'proxy-server-nameserver: *chinaDohDNS' not in text:
-        raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
-    if '&defaultDNS' not in text or '&proxyServerDNS' not in text:
-        raise RuntimeError(f'{file}: upstream DNS compatibility anchors missing')
+    for file in STATIC_FILES:
+        text = file.read_text(encoding='utf-8')
+        if 'default-nameserver: *chinaDohDNS' not in text:
+            raise RuntimeError(f'{file}: encrypted default DNS policy not preserved')
+        if 'proxy-server-nameserver: *chinaDohDNS' not in text:
+            raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
+        if '&defaultDNS' not in text or '&proxyServerDNS' not in text:
+            raise RuntimeError(f'{file}: upstream DNS compatibility anchors missing')
 
-for file in JS_FILES:
-    text = file.read_text(encoding='utf-8')
-    if "'default-nameserver': chinaDohDNS," not in text:
-        raise RuntimeError(f'{file}: encrypted default DNS policy not preserved')
-    if "'proxy-server-nameserver': chinaDohDNS," not in text:
-        raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
-    for name in ('defaultDNS', 'proxyServerDNS'):
-        start = text.find(f'const {name} = [')
-        end = text.find('];', start)
-        if start == -1 or end == -1 or not all(item in text[start:end] for item in CHINA_DOH):
-            raise RuntimeError(f'{file}: {name} does not mirror NetWeave encrypted DNS values')
-    fake_ip_pos = text.find("'fake-ip-filter': [")
-    spread_pos = text.find('...proxyFakeIpFilter,', fake_ip_pos)
-    if fake_ip_pos == -1 or spread_pos == -1:
-        raise RuntimeError(f'{file}: proxyFakeIpFilter spread is unavailable before downstream patch')
+    for file in JS_FILES:
+        text = file.read_text(encoding='utf-8')
+        if "'default-nameserver': chinaDohDNS," not in text:
+            raise RuntimeError(f'{file}: encrypted default DNS policy not preserved')
+        if "'proxy-server-nameserver': chinaDohDNS," not in text:
+            raise RuntimeError(f'{file}: encrypted proxy-server DNS policy not preserved')
+        for name in ('defaultDNS', 'proxyServerDNS'):
+            start = text.find(f'const {name} = [')
+            end = text.find('];', start)
+            if start == -1 or end == -1 or not all(item in text[start:end] for item in CHINA_DOH):
+                raise RuntimeError(f'{file}: {name} does not mirror NetWeave encrypted DNS values')
+        fake_ip_pos = text.find("'fake-ip-filter': [")
+        spread_pos = text.find('...proxyFakeIpFilter,', fake_ip_pos)
+        if fake_ip_pos == -1 or spread_pos == -1:
+            raise RuntimeError(f'{file}: proxyFakeIpFilter spread is unavailable before downstream patch')
 
-full_script = Path('Script/mihomoScript.js').read_text(encoding='utf-8')
-static_full = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
-unit_tests = Path('Test/suites/unit.js').read_text(encoding='utf-8')
-if 'TW_filter:' in static_full and "台湾 01 → 台湾省" in unit_tests and "name: '台湾省'" not in full_script:
-    raise RuntimeError('Script/mihomoScript.js: upstream still expects 台湾省 but full script does not define it')
+    full_script = Path('Script/mihomoScript.js').read_text(encoding='utf-8')
+    static_full = Path('Config/mihomoConfig.yaml').read_text(encoding='utf-8')
+    unit_tests = Path('Test/suites/unit.js').read_text(encoding='utf-8')
+    if 'TW_filter:' in static_full and "台湾 01 → 台湾省" in unit_tests and "name: '台湾省'" not in full_script:
+        raise RuntimeError('Script/mihomoScript.js: upstream still expects 台湾省 but full script does not define it')
 
-print('Upstream DNS, fake-ip layout and transitional region compatibility verified')
+    print('Upstream DNS, fake-ip layout and transitional region compatibility verified')
+
+
+if __name__ == '__main__':
+    main()

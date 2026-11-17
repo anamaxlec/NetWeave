@@ -65,9 +65,15 @@ def parse_string_list_field(text, key):
     return entries, label_start, end
 
 
+def _find_region_marker(text, marker, start=0):
+    """Find exact line-level anchors in either flat or nested upstream YAML."""
+    match = re.search(r'(?m)^[ \t]*' + re.escape(marker.lstrip()), text[start:])
+    return start + match.start() if match else -1
+
+
 def _insert_region_into_group(text, start_marker, end_marker, label):
-    start = text.find(start_marker)
-    end = text.find(end_marker, start)
+    start = _find_region_marker(text, start_marker)
+    end = _find_region_marker(text, end_marker, start + 1) if start != -1 else -1
     if start == -1 or end == -1:
         raise RuntimeError(f'{label}: group boundaries missing')
     block = text[start:end]
@@ -97,13 +103,13 @@ def _remove_legacy_tw(text, path):
 def ensure_static_tw(text, path):
     """Keep TW filter, memberships and both static groups even if upstream deletes them."""
     text = _remove_legacy_tw(text, path)
-    if "  TW_filter:" not in text:
-        m = re.search(r'(?m)^  SG_filter:.*\n', text)
+    if not re.search(r'(?m)^[ \t]*TW_filter:', text):
+        m = re.search(r'(?m)^(?P<indent>[ \t]*)SG_filter:.*\n', text)
         if not m:
             raise RuntimeError(f'{path}: SG_filter anchor missing for TW restoration')
         text = (
             text[:m.end()]
-            + f"  TW_filter: &TW_filter {{ filter: '(?i)({TW_PATTERN})' }}\n"
+            + f"{m.group('indent')}TW_filter: &TW_filter {{ filter: '(?i)({TW_PATTERN})' }}\n"
             + text[m.end():]
         )
 
@@ -177,7 +183,9 @@ def verify_tw_static(text, path):
         raise RuntimeError(f'{path}: legacy TW group remains')
     if text.count("  - name: '台湾'\n") != 1 or text.count("  - name: '台湾-自动选择'\n") != 1:
         raise RuntimeError(f'{path}: expected exactly one TW group pair')
-    for value in ('  TW_filter:', "  - name: '台湾'\n", "  - name: '台湾-自动选择'\n"):
+    if not re.search(r'(?m)^[ \t]*TW_filter:', text):
+        raise RuntimeError(f'{path}: TW protection missing TW_filter')
+    for value in ("  - name: '台湾'\n", "  - name: '台湾-自动选择'\n"):
         if value not in text:
             raise RuntimeError(f'{path}: TW protection missing {value}')
     for start, end in [
@@ -185,7 +193,8 @@ def verify_tw_static(text, path):
         ('  proxies_direct:', '  proxies_reject:'),
         ("  - name: '默认代理'\n", "  - name: '手动选择'\n"),
     ]:
-        a, b = text.find(start), text.find(end, text.find(start))
+        a = _find_region_marker(text, start)
+        b = _find_region_marker(text, end, a + 1) if a != -1 else -1
         if a == -1 or b == -1 or "'台湾'" not in text[a:b]:
             raise RuntimeError(f'{path}: TW missing from an upstream shared group')
 
