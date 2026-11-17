@@ -223,14 +223,27 @@ function runIntegrationTests(h, api, fx, loadScript, scriptFile) {
     }),
   );
 
-  h.test('机场 DNS 优先：保留机场 hosts 映射，开关关闭时不改变原始 hosts 行为', () => {
+  h.test('机场 DNS 优先：遵循上游 hosts 改写规则，开关只扩大作用范围', () => {
     const cfg = fx.minimalSubscription();
     cfg.hosts = { 'a.example.com': ['203.0.113.16'] };
     cfg.dns = { nameserver: ['https://private-airport.example/dns-query#DIRECT'] };
+
+    // 上游新行为：节点专用 DNS 缺失时，即使开关关闭也会优先使用 hosts。
     const standard = api.main(cfg);
-    h.assertEqual(standard.proxies.find((p) => p.name === '🇭🇰 香港 A').server, 'a.example.com');
+    h.assertEqual(standard.proxies.find((p) => p.name === '🇭🇰 香港 A').server, '203.0.113.16');
+
+    // 专用节点 DNS 明确存在且不触发上游 hosts 改写时，默认仍保留原始域名。
+    const explicitDns = fx.minimalSubscription();
+    explicitDns.hosts = cfg.hosts;
+    explicitDns.dns = {
+      ...cfg.dns,
+      'proxy-server-nameserver': ['https://private-airport.example/dns-query#DIRECT'],
+    };
+    const baseline = api.main(explicitDns);
+    h.assertEqual(baseline.proxies.find((p) => p.name === '🇭🇰 香港 A').server, 'a.example.com');
+
     withOptions(api, { 优先机场DNS: true }, () => {
-      const out = api.main(cfg);
+      const out = api.main(explicitDns);
       h.assertEqual(out.proxies.find((p) => p.name === '🇭🇰 香港 A').server, '203.0.113.16');
       h.assert(!('a.example.com' in (out.dns['proxy-server-nameserver-policy'] || {})));
     });
