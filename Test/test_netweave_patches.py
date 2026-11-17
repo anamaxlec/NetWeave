@@ -26,17 +26,25 @@ class NetWeavePatchTests(unittest.TestCase):
     def test_dns_replay_supports_nested_and_flat_upstream_anchors(self):
         for name in ('mihomoConfig.yaml', 'mihomoConfigLite.yaml'):
             original = (ROOT / 'Config' / name).read_text(encoding='utf-8')
-            source = re.sub(r'(?m)^  chinaDohDNS:.*\n', '', original, count=1)
-            start = source.index('dns_common:\n')
+            # 源文件可能来自旧版嵌套 YAML，也可能已由同步流程合并为新版顶层 YAML。
+            source = re.sub(r'(?m)^[ \t]*chinaDohDNS:.*\n', '', original, count=1)
+            marker = '# 国内外 DNS 定义\n'
+            start = source.index(marker) + len(marker)
             end = source.index('\ndns:\n', start)
-            definitions = source[start + len('dns_common:\n'):end]
-            flat = (
-                source[:start]
-                + ''.join(line[2:] if line.startswith('  ') else line
-                          for line in definitions.splitlines(keepends=True))
-                + source[end:]
+            definitions = source[start:end]
+            if definitions.lstrip('\n').startswith('dns_common:\n'):
+                definitions = definitions.replace('dns_common:\n', '', 1)
+                definitions = ''.join(
+                    line[2:] if line.startswith('  ') else line
+                    for line in definitions.splitlines(keepends=True)
+                )
+            flat = source[:start] + definitions + source[end:]
+            nested_definitions = ''.join(
+                '  ' + line if line.strip() else line
+                for line in definitions.splitlines(keepends=True)
             )
-            for layout, fixture in (('nested', source), ('flat', flat)):
+            nested = source[:start] + 'dns_common:\n' + nested_definitions + source[end:]
+            for layout, fixture in (('nested', nested), ('flat', flat)):
                 with self.subTest(name=name, layout=layout):
                     path = Path('Config') / name
                     patched = patch_static_dns(fixture, path)
